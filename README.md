@@ -1,6 +1,6 @@
 # Quadruped‑RL: Learning to Walk with a Lightweight Physics Engine
 
-![Simulation en direct](visualizations/live\_screen.png)
+![Live Simulation](visualizations/live_screen.png)
 
 ## 1. Overview
 This project explores **model‑free reinforcement learning** for locomotion control of a simulated quadruped robot.  
@@ -49,27 +49,36 @@ $$
 $$
 
 ### 3.2 Training Signal  
-Replay buffer $D$ (size $10^3$) stores tuples $(s,a,r,d,s')$. For a minibatch $B$:
+Replay buffer $D$ (size $10^3$) stores tuples $(s,a,r,\,d,\,s')$.
 
-* **TD‑target**  
-  $$
-  y\_i = r\_i + \gamma(1-d\_i)\,V\_{\phi'}(s'\_i)
-  $$
-* **Advantages**  
-  $$
-  A\_i = y\_i - V\_\phi(s\_i)
-  $$
+For a minibatch $B$:
 
-* **Critic loss**  
-  $$
-  \mathcal{L}\_c = \frac1{|B|}\sum\_{i}\bigl(y\_i - V\_\phi(s\_i)\bigr)^2
-  $$
+* **TD-target**
 
-* **Actor loss** (categorical policy with per‑joint independence)  
-  $$
-  \mathcal{L}\_a = -\frac1{|B|}\sum\_{i} \underbrace{\log\pi\_\theta(a\_i\mid s\_i)}\_{\text{sum over 8 joints}}\;A\_i
-  \;-\;\beta\,\mathcal{H}\bigl[\pi\_\theta(\cdot\mid s\_i)\bigr],\qquad \beta=0.1.
-  $$
+  ```math
+  y_i = r_i + \gamma(1-d_i)\,V_{\phi'}(s'_i)
+  ```
+
+* **Advantages**
+
+  ```math
+  A_i = y_i - V_\phi(s_i)
+  ```
+
+* **Critic loss**
+
+  ```math
+  \mathcal{L}_c = \frac{1}{\lvert B\rvert}\sum_{i}\bigl(y_i - V_\phi(s_i)\bigr)^2
+  ```
+
+* **Actor loss** (categorical policy with per-joint independence)
+
+  ```math
+  \mathcal{L}_a = -\frac{1}{\lvert B\rvert}\sum_{i}
+  \underbrace{\log\pi_\theta(a_i\mid s_i)}_{\text{sum over 8 joints}}\,A_i
+  - \beta\,\mathcal{H}\bigl[\pi_\theta(\cdot\mid s_i)\bigr],
+  \qquad \beta=0.1.
+  ```
 
 Total loss $\mathcal{L} = \mathcal{L}\_a + \mathcal{L}\_c$.
 
