@@ -1,5 +1,7 @@
 # Quadruped‑RL: Learning to Walk with a Lightweight Physics Engine
 
+![Simulation en direct](visualizations/live_screen.png)
+
 ## 1. Overview
 This project explores **model‑free reinforcement learning** for locomotion control of a simulated quadruped robot.  
 A minimalist 3‑D physics engine written with NumPy and Pygame is coupled with an **actor–critic agent** that learns to produce joint torques (discretised as \(\{-1,0,1\}\)) and propel the robot forward while maintaining balance.
