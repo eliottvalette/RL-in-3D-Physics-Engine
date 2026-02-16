@@ -28,10 +28,12 @@ Each observation $s\_t \in \mathbb{R}^{59}$ concatenates
 | Safety flags | 8 | danger‑zone indicators & time‑since flags |
 
 ### 2.3 Reward  
-Let $d\_t$ be forward distance, $\phi\_t = |pitch|+|yaw|+|roll|$. The per‑step reward  
-$$
-r\_t = 0.2\,[d\_t>d\_{t-1}] \;+\; 20\,(d\_t - d\_{t-1}) \;-\; 0.5\,\mathbb{1}\_{\text{height danger}} \;-\; \lambda\_\text{tilt}\,\phi\_t
-$$
+Let $d\_t$ be forward distance, $\phi\_t = |pitch|+|yaw|+|roll|$. The per‑step reward
+
+```math
+r_t = 0.2\,[d_t>d_{t-1}] \;+\; 20\,(d_t - d_{t-1}) \;-\; 0.5\,\mathbb{1}_{\text{height danger}} \;-\; \lambda_\text{tilt}\,\phi_t
+```
+
 plus sparse bonuses of $+2$ when crossing radii $\{0.5,0.75,1,\dotsc,10\}$.  
 Episodes terminate when height leaves $[4.5,5.5]$ for a sustained window or when the maximum number of steps is reached.
 
@@ -43,10 +45,11 @@ Episodes terminate when height leaves $[4.5,5.5]$ for a sustained window or when
 The **QuadrupedAgent** couples  
 * **Actor** $\pi\_\theta(a\mid s)$: three‑layer MLP with GELU+LayerNorm, outputting per‑joint logits reshaped to $(8,3)$.  
 * **Critic** $V\_\phi(s)$: duelling value head sharing the same backbone depth.  
-Target critic $\phi'$ is updated by Polyak averaging  
-$$
+Target critic $\phi'$ is updated by Polyak averaging
+
+```math
 \phi' \leftarrow \tau\,\phi' + (1-\tau)\,\phi,\qquad \tau = 0.995.
-$$
+```
 
 ### 3.2 Training Signal  
 Replay buffer $D$ (size $10^3$) stores tuples $(s,a,r,\,d,\,s')$.
@@ -83,12 +86,13 @@ For a minibatch $B$:
 Total loss $\mathcal{L} = \mathcal{L}\_a + \mathcal{L}\_c$.
 
 ### 3.3 Exploration  
-An **ε‑greedy** wrapper selects a random joint vector with probability  
-$$
-\varepsilon = \max\!\Bigl(\varepsilon\_\text{min},\,\varepsilon\_0\,\delta^{\,t}\Bigr),
+An **ε-greedy** wrapper selects a random joint vector with probability
+
+```math
+\varepsilon = \max\Bigl(\varepsilon_{\text{min}},\,\varepsilon_0\,\delta^{t}\Bigr),
 \quad
-\varepsilon\_0 = 0.5,\;\varepsilon\_\text{min}=0.01,\;\delta=0.998.
-$$
+\varepsilon_0 = 0.5,\;\varepsilon_{\text{min}}=0.01,\;\delta=0.998.
+```
 
 ---
 
