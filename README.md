@@ -1,6 +1,6 @@
 # Quadruped‑RL: Learning to Walk with a Lightweight Physics Engine
 
-![Simulation en direct](visualizations/live_screen.png)
+![Simulation en direct](visualizations/live\_screen.png)
 
 ## 1. Overview
 This project explores **model‑free reinforcement learning** for locomotion control of a simulated quadruped robot.  
@@ -17,7 +17,7 @@ A minimalist 3‑D physics engine written with NumPy and Pygame is coupled with 
 * Soft velocity caps and Polyak‑style inertia damping ensure numerical stability.  
 
 ### 2.2 State Representation  
-Each observation $s_t \in \mathbb{R}^{59}$ concatenates  
+Each observation $s\_t \in \mathbb{R}^{59}$ concatenates  
 
 | Block | Dim | Content |
 |-------|----:|---------|
@@ -28,9 +28,9 @@ Each observation $s_t \in \mathbb{R}^{59}$ concatenates
 | Safety flags | 8 | danger‑zone indicators & time‑since flags |
 
 ### 2.3 Reward  
-Let $d_t$ be forward distance, $\phi_t = |pitch|+|yaw|+|roll|$. The per‑step reward  
+Let $d\_t$ be forward distance, $\phi\_t = |pitch|+|yaw|+|roll|$. The per‑step reward  
 $$
-r_t = 0.2\,[d_t>d_{t-1}] \;+\; 20\,(d_t - d_{t-1}) \;-\; 0.5\,\mathbb{1}_{\text{height danger}} \;-\; \lambda_\text{tilt}\,\phi_t
+r\_t = 0.2\,[d\_t>d\_{t-1}] \;+\; 20\,(d\_t - d\_{t-1}) \;-\; 0.5\,\mathbb{1}\_{\text{height danger}} \;-\; \lambda\_\text{tilt}\,\phi\_t
 $$
 plus sparse bonuses of $+2$ when crossing radii $\{0.5,0.75,1,\dotsc,10\}$.  
 Episodes terminate when height leaves $[4.5,5.5]$ for a sustained window or when the maximum number of steps is reached.
@@ -41,45 +41,44 @@ Episodes terminate when height leaves $[4.5,5.5]$ for a sustained window or when
 
 ### 3.1 Agent Architecture  
 The **QuadrupedAgent** couples  
-* **Actor** $\pi_\theta(a\mid s)$: three‑layer MLP with GELU+LayerNorm, outputting per‑joint logits reshaped to $(8,3)$.  
-* **Critic** $V_\phi(s)$: duelling value head sharing the same backbone depth.  
+* **Actor** $\pi\_\theta(a\mid s)$: three‑layer MLP with GELU+LayerNorm, outputting per‑joint logits reshaped to $(8,3)$.  
+* **Critic** $V\_\phi(s)$: duelling value head sharing the same backbone depth.  
 Target critic $\phi'$ is updated by Polyak averaging  
 $$
 \phi' \leftarrow \tau\,\phi' + (1-\tau)\,\phi,\qquad \tau = 0.995.
 $$
 
 ### 3.2 Training Signal  
-Replay buffer $D$ (size $10^3$) stores tuples $(s,a,r,\,d,\,s')$.  
-For a minibatch $B$:
+Replay buffer $D$ (size $10^3$) stores tuples $(s,a,r,d,s')$. For a minibatch $B$:
 
 * **TD‑target**  
   $$
-  y_i = r_i + \gamma(1-d_i)\,V_{\phi'}(s'_i)
+  y\_i = r\_i + \gamma(1-d\_i)\,V\_{\phi'}(s'\_i)
   $$
 * **Advantages**  
   $$
-  A_i = y_i - V_\phi(s_i)
+  A\_i = y\_i - V\_\phi(s\_i)
   $$
 
 * **Critic loss**  
   $$
-  \mathcal{L}_c = \frac1{|B|}\sum_{i}\bigl(y_i - V_\phi(s_i)\bigr)^2
+  \mathcal{L}\_c = \frac1{|B|}\sum\_{i}\bigl(y\_i - V\_\phi(s\_i)\bigr)^2
   $$
 
 * **Actor loss** (categorical policy with per‑joint independence)  
   $$
-  \mathcal{L}_a = -\frac1{|B|}\sum_{i} \underbrace{\log\pi_\theta(a_i\mid s_i)}_{\text{sum over 8 joints}}\;A_i
-  \;-\;\beta\,\mathcal{H}\bigl[\pi_\theta(\cdot\mid s_i)\bigr],\qquad \beta=0.1.
+  \mathcal{L}\_a = -\frac1{|B|}\sum\_{i} \underbrace{\log\pi\_\theta(a\_i\mid s\_i)}\_{\text{sum over 8 joints}}\;A\_i
+  \;-\;\beta\,\mathcal{H}\bigl[\pi\_\theta(\cdot\mid s\_i)\bigr],\qquad \beta=0.1.
   $$
 
-Total loss $\mathcal{L} = \mathcal{L}_a + \mathcal{L}_c$.
+Total loss $\mathcal{L} = \mathcal{L}\_a + \mathcal{L}\_c$.
 
 ### 3.3 Exploration  
 An **ε‑greedy** wrapper selects a random joint vector with probability  
 $$
-\varepsilon = \max\!\Bigl(\varepsilon_\text{min},\,\varepsilon_0\,\delta^{\,t}\Bigr),
+\varepsilon = \max\!\Bigl(\varepsilon\_\text{min},\,\varepsilon\_0\,\delta^{\,t}\Bigr),
 \quad
-\varepsilon_0 = 0.5,\;\varepsilon_\text{min}=0.01,\;\delta=0.998.
+\varepsilon\_0 = 0.5,\;\varepsilon\_\text{min}=0.01,\;\delta=0.998.
 $$
 
 ---
