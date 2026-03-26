@@ -219,7 +219,7 @@ def update_quadruped(quadruped: Quadruped):
 
     quadruped.velocity += GRAVITY * DT
     quadruped.position += quadruped.velocity * DT
-    quadruped.rotation = (quadruped.rotation + quadruped.angular_velocity * DT) % (2 * np.pi)
+    quadruped.integrate_orientation(DT)
 
     quadruped._needs_update = True
     current_vertices = quadruped.get_vertices()

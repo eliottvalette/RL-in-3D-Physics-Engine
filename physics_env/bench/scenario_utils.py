@@ -16,6 +16,7 @@ def reset_env_state(env):
 
 
 def sync_quadruped_state(env):
+    env.quadruped.sync_orientation_from_euler()
     env.quadruped._needs_update = True
     env.quadruped.rotated_vertices = env.quadruped.get_vertices()
 

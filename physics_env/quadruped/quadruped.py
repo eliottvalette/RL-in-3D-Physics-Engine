@@ -14,6 +14,25 @@ LOWER_LEG_MASS   = 0.15       # ×4
 WINDOW_WIDTH = 1500
 WINDOW_HEIGHT = 800
 
+
+def _quat_normalize(quaternion):
+    norm = np.linalg.norm(quaternion)
+    if norm <= 1e-12:
+        return np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
+    return quaternion / norm
+
+
+def _quat_multiply(q1, q2):
+    w1, x1, y1, z1 = q1
+    w2, x2, y2, z2 = q2
+    return np.array([
+        w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+        w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+        w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+        w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+    ], dtype=np.float64)
+
+
 class Quadruped:
     def __init__(self, position, vertices, vertices_dict, rotation = np.array([0.0, 0.0, 0.0]), velocity = np.array([0.0, 0.0, 0.0]), color = (255, 255, 255)):
         self.initial_position = position.copy()
@@ -28,6 +47,7 @@ class Quadruped:
         self.position = position # position en x, y, z du centre du quadruped
         self.velocity = velocity
         self.rotation = rotation # rotation en radians
+        self.orientation = self._euler_to_quaternion(rotation)
         self.angular_velocity = np.array([0.0, 0.0, 0.0])
         self.vertices = vertices.copy()
         self.vertices_dict = vertices_dict.copy()
@@ -53,10 +73,14 @@ class Quadruped:
         self.active_contact_indices = np.empty(0, dtype=np.int64)
         self._needs_update = True
         self.rotated_vertices = None
-        self.local_center_of_mass = self._compute_local_center_of_mass()
+        self.local_transformed_vertices = None
+        self.part_local_rotations = []
+        self.part_dimensions = self._compute_part_dimensions()
+        self.local_center_of_mass = np.zeros(3, dtype=np.float64)
         
         # --- masse & inertie réalistes --------------------------
-        self.mass, self.I_body = self._compute_mass_inertia()
+        self.mass = BODY_MASS + 4 * (UPPER_LEG_MASS + LOWER_LEG_MASS)
+        self.I_body = np.eye(3, dtype=np.float64)
         self.rotated_vertices = self.get_vertices()
         self.motor_delay =  4
 
@@ -71,6 +95,7 @@ class Quadruped:
         self.vertices = self.initial_vertices.copy()
         self.velocity = self.initial_velocity.copy() + np.random.rand(3)
         self.rotation = self.initial_rotation.copy() + np.random.rand(3)
+        self.orientation = self._euler_to_quaternion(self.rotation)
         self.angular_velocity = self.initial_angular_velocity.copy() + np.random.rand(3)
         self.shoulder_angles = self.initial_shoulder_angles.copy()
         self.elbow_angles = self.initial_elbow_angles.copy()
@@ -86,6 +111,7 @@ class Quadruped:
         self.vertices = self.initial_vertices.copy()
         self.velocity = self.initial_velocity.copy()
         self.rotation = self.initial_rotation.copy()
+        self.orientation = self._euler_to_quaternion(self.rotation)
         self.angular_velocity = self.initial_angular_velocity.copy()
         self.shoulder_angles = self.initial_shoulder_angles.copy()
         self.elbow_angles = self.initial_elbow_angles.copy()
@@ -97,27 +123,12 @@ class Quadruped:
         self.rotated_vertices = self.get_vertices()
 
     def get_rotation_matrix(self):
-        rot_x, rot_y, rot_z = self.rotation
-        cos_x, sin_x = math.cos(rot_x), math.sin(rot_x)
-        cos_y, sin_y = math.cos(rot_y), math.sin(rot_y)
-        cos_z, sin_z = math.cos(rot_z), math.sin(rot_z)
-
-        rx = np.array([
-            [1, 0, 0],
-            [0, cos_x, -sin_x],
-            [0, sin_x, cos_x]
-        ])
-        ry = np.array([
-            [cos_y, 0, sin_y],
-            [0, 1, 0],
-            [-sin_y, 0, cos_y]
-        ])
-        rz = np.array([
-            [cos_z, -sin_z, 0],
-            [sin_z, cos_z, 0],
-            [0, 0, 1]
-        ])
-        return rz @ ry @ rx
+        w, x, y, z = _quat_normalize(self.orientation)
+        return np.array([
+            [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+        ], dtype=np.float64)
 
     def get_world_center_of_mass_offset(self):
         return self.get_rotation_matrix() @ self.local_center_of_mass
@@ -130,90 +141,166 @@ class Quadruped:
 
     def get_world_inverse_inertia(self):
         rotation_matrix = self.get_rotation_matrix()
-        body_inverse_inertia = np.diag(np.divide(1.0, self.I_body, out=np.zeros_like(self.I_body), where=self.I_body != 0.0))
+        body_inverse_inertia = np.linalg.inv(self.I_body)
         return rotation_matrix @ body_inverse_inertia @ rotation_matrix.T
 
     def get_world_inertia(self):
         rotation_matrix = self.get_rotation_matrix()
-        body_inertia = np.diag(self.I_body)
-        return rotation_matrix @ body_inertia @ rotation_matrix.T
+        return rotation_matrix @ self.I_body @ rotation_matrix.T
+
+    def sync_orientation_from_euler(self):
+        self.orientation = self._euler_to_quaternion(self.rotation)
+
+    def sync_euler_from_orientation(self):
+        self.rotation = self._quaternion_to_euler(self.orientation)
+
+    def integrate_orientation(self, dt):
+        angular_speed = float(np.linalg.norm(self.angular_velocity))
+        if angular_speed <= 1e-12:
+            return
+        axis = self.angular_velocity / angular_speed
+        half_angle = 0.5 * angular_speed * dt
+        sin_half = math.sin(half_angle)
+        delta_quaternion = np.array([
+            math.cos(half_angle),
+            axis[0] * sin_half,
+            axis[1] * sin_half,
+            axis[2] * sin_half,
+        ], dtype=np.float64)
+        self.orientation = _quat_normalize(_quat_multiply(delta_quaternion, self.orientation))
+        self.sync_euler_from_orientation()
+
+    def _euler_to_quaternion(self, euler):
+        roll, pitch, yaw = euler
+        cr, sr = math.cos(roll * 0.5), math.sin(roll * 0.5)
+        cp, sp = math.cos(pitch * 0.5), math.sin(pitch * 0.5)
+        cy, sy = math.cos(yaw * 0.5), math.sin(yaw * 0.5)
+        return _quat_normalize(np.array([
+            cy * cp * cr + sy * sp * sr,
+            cy * cp * sr - sy * sp * cr,
+            cy * sp * cr + sy * cp * sr,
+            sy * cp * cr - cy * sp * sr,
+        ], dtype=np.float64))
+
+    def _quaternion_to_euler(self, quaternion):
+        w, x, y, z = _quat_normalize(quaternion)
+        sinr_cosp = 2.0 * (w * x + y * z)
+        cosr_cosp = 1.0 - 2.0 * (x * x + y * y)
+        roll = math.atan2(sinr_cosp, cosr_cosp)
+
+        sinp = 2.0 * (w * y - z * x)
+        if abs(sinp) >= 1.0:
+            pitch = math.copysign(math.pi / 2.0, sinp)
+        else:
+            pitch = math.asin(sinp)
+
+        siny_cosp = 2.0 * (w * z + x * y)
+        cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
+        yaw = math.atan2(siny_cosp, cosy_cosp)
+        return np.array([roll, pitch, yaw], dtype=np.float64)
+
+    def _compute_part_dimensions(self):
+        dimensions = []
+        for part_idx in range(len(self.initial_vertices) // 8):
+            part_vertices = np.array(self.initial_vertices[part_idx * 8:(part_idx + 1) * 8], dtype=np.float64)
+            mins = part_vertices.min(axis=0)
+            maxs = part_vertices.max(axis=0)
+            dimensions.append(maxs - mins)
+        return dimensions
+
+    def _build_local_geometry(self):
+        cos_sh = np.cos(self.shoulder_angles)
+        sin_sh = np.sin(self.shoulder_angles)
+        cos_el = np.cos(self.elbow_angles)
+        sin_el = np.sin(self.elbow_angles)
+
+        shoulder_rotations = []
+        elbow_rotations = []
+
+        for leg_idx in range(4):
+            shoulder_rotations.append(np.array([
+                [1, 0, 0],
+                [0, cos_sh[leg_idx], -sin_sh[leg_idx]],
+                [0, sin_sh[leg_idx], cos_sh[leg_idx]]
+            ], dtype=np.float64))
+            elbow_rotations.append(np.array([
+                [1, 0, 0],
+                [0, cos_el[leg_idx], -sin_el[leg_idx]],
+                [0, sin_el[leg_idx], cos_el[leg_idx]]
+            ], dtype=np.float64))
+
+        result = np.empty((len(self.vertices), 3), dtype=np.float64)
+        part_rotations = [np.eye(3, dtype=np.float64) for _ in range(len(self.vertices) // 8)]
+
+        for i, vertex in enumerate(self.vertices):
+            part_index = i // 8
+            v = vertex.copy()
+
+            if part_index == 0:
+                part_rotations[part_index] = np.eye(3, dtype=np.float64)
+            elif 1 <= part_index <= 4:
+                leg_index = part_index - 1
+                shoulder_center = self.shoulder_positions[leg_index]
+                relative_pos = v - shoulder_center
+                part_rotations[part_index] = shoulder_rotations[leg_index]
+                v = shoulder_center + shoulder_rotations[leg_index] @ relative_pos
+            elif 5 <= part_index <= 8:
+                leg_index = part_index - 5
+                shoulder_center = self.shoulder_positions[leg_index]
+                relative_pos = v - shoulder_center
+                v = shoulder_center + shoulder_rotations[leg_index] @ relative_pos
+
+                elbow_center_original = self.elbow_positions[leg_index]
+                elbow_relative_pos = elbow_center_original - shoulder_center
+                elbow_center_transformed = shoulder_center + shoulder_rotations[leg_index] @ elbow_relative_pos
+                relative_pos = v - elbow_center_transformed
+                v = elbow_center_transformed + elbow_rotations[leg_index] @ relative_pos
+                part_rotations[part_index] = elbow_rotations[leg_index] @ shoulder_rotations[leg_index]
+
+            result[i] = v
+
+        return result, part_rotations
+
+    def _update_mass_properties(self, local_vertices, part_rotations):
+        masses = [BODY_MASS] + [UPPER_LEG_MASS] * 4 + [LOWER_LEG_MASS] * 4
+        part_centers = []
+        for part_idx in range(len(local_vertices) // 8):
+            part_vertices = local_vertices[part_idx * 8:(part_idx + 1) * 8]
+            part_centers.append(part_vertices.mean(axis=0))
+
+        weighted_sum = sum(mass * center for mass, center in zip(masses, part_centers))
+        local_center_of_mass = weighted_sum / self.mass
+
+        inertia_body = np.zeros((3, 3), dtype=np.float64)
+        for part_idx, (mass, center, rotation_matrix, dims) in enumerate(zip(masses, part_centers, part_rotations, self.part_dimensions)):
+            dx, dy, dz = dims
+            part_inertia_diag = np.array([
+                mass * (dy ** 2 + dz ** 2) / 12.0,
+                mass * (dx ** 2 + dz ** 2) / 12.0,
+                mass * (dx ** 2 + dy ** 2) / 12.0,
+            ], dtype=np.float64)
+            part_inertia = rotation_matrix @ np.diag(part_inertia_diag) @ rotation_matrix.T
+            offset = center - local_center_of_mass
+            offset_sq = float(offset @ offset)
+            inertia_body += part_inertia + mass * (offset_sq * np.eye(3) - np.outer(offset, offset))
+
+        self.local_center_of_mass = local_center_of_mass
+        self.I_body = inertia_body
     
     def get_vertices(self):
         """Retourne les vertices. Recalcule uniquement si nécessaire."""
         if not self._needs_update and self.rotated_vertices is not None:
             return self.rotated_vertices
 
-        # ---------- pré‑calculs optimisés --------------
-        # Précalcul des sinus/cosinus pour les articulations
-        cos_sh = np.cos(self.shoulder_angles)
-        sin_sh = np.sin(self.shoulder_angles)
-        cos_el = np.cos(self.elbow_angles)
-        sin_el = np.sin(self.elbow_angles)
-
         R_global = self.get_rotation_matrix()
+        local_vertices, part_rotations = self._build_local_geometry()
+        self.local_transformed_vertices = local_vertices
+        self.part_local_rotations = part_rotations
+        self._update_mass_properties(local_vertices, part_rotations)
 
-        # Précalcul des matrices de rotation des articulations pour chaque jambe
-        shoulder_rotations = []
-        elbow_rotations = []
-        
-        for leg_idx in range(4):
-            # Matrice de rotation d'épaule (rotation autour de l'axe X)
-            R_shoulder = np.array([
-                [1, 0, 0],
-                [0, cos_sh[leg_idx], -sin_sh[leg_idx]],
-                [0, sin_sh[leg_idx], cos_sh[leg_idx]]
-            ])
-            shoulder_rotations.append(R_shoulder)
-            
-            # Matrice de rotation de coude (rotation autour de l'axe X)
-            R_elbow = np.array([
-                [1, 0, 0],
-                [0, cos_el[leg_idx], -sin_el[leg_idx]],
-                [0, sin_el[leg_idx], cos_el[leg_idx]]
-            ])
-            elbow_rotations.append(R_elbow)
-
-        # Allocation mémoire optimisée avec numpy array
-        result = np.empty((len(self.vertices), 3))
-        
-        for i, vertex in enumerate(self.vertices):
-            part_index = i // 8
-            v = vertex.copy()
-
-            if part_index == 0:
-                # Body - pas de transformation locale
-                pass
-
-            elif 1 <= part_index <= 4:
-                # Upper legs (épaules)
-                leg_index = part_index - 1
-                shoulder_center = self.shoulder_positions[leg_index]
-                relative_pos = v - shoulder_center
-                
-                # Application de la rotation d'épaule
-                v = shoulder_center + shoulder_rotations[leg_index] @ relative_pos
-
-            elif 5 <= part_index <= 8:
-                # Lower legs (coudes)
-                leg_index = part_index - 5
-                shoulder_center = self.shoulder_positions[leg_index]
-                relative_pos = v - shoulder_center
-                
-                # Application de la rotation d'épaule
-                v = shoulder_center + shoulder_rotations[leg_index] @ relative_pos
-
-                # Calcul de la position du coude transformée
-                elbow_center_original = self.elbow_positions[leg_index]
-                elbow_relative_pos = elbow_center_original - shoulder_center
-                elbow_center_transformed = shoulder_center + shoulder_rotations[leg_index] @ elbow_relative_pos
-
-                # Application de la rotation de coude
-                relative_pos = v - elbow_center_transformed
-                v = elbow_center_transformed + elbow_rotations[leg_index] @ relative_pos
-
-            # Rotation globale et translation en une seule opération
-            v = R_global @ v + self.position
-            result[i] = v
+        result = np.empty((len(self.vertices), 3), dtype=np.float64)
+        for i, vertex in enumerate(local_vertices):
+            result[i] = R_global @ vertex + self.position
 
         self.rotated_vertices = result
         self._needs_update = False
@@ -479,54 +566,3 @@ class Quadruped:
                 
                 # Optionnel : dessiner les contours des faces pour plus de définition
                 pygame.draw.polygon(screen, (50, 50, 50), points_2d, 1)
-
-    # ------------------------------------------------------------------
-    #  Inertie ≈ somme des solides élémentaires : 1 parallélépipède + 8 barreaux
-    # ------------------------------------------------------------------
-    def _compute_mass_inertia(self):
-        """
-        Retourne (masse_totale, I_body) :
-        I_body = np.array([Ixx, Iyy, Izz]) dans le repère du corps (non tourné)
-        """
-        # 0‑‑7 = tronc
-        body_vs = self.initial_vertices[0:8]
-        xs = [v[0] for v in body_vs]
-        ys = [v[1] for v in body_vs]
-        zs = [v[2] for v in body_vs]
-        a, b, c = (max(xs) - min(xs),
-                   max(ys) - min(ys),
-                   max(zs) - min(zs))               # côtés du pavé
-
-        I_body = np.zeros(3)
-
-        # --- 1) Tronc plein (parallélépipède) -------------------
-        I_body += np.array([
-            BODY_MASS * (b**2 + c**2) / 12,
-            BODY_MASS * (a**2 + c**2) / 12,
-            BODY_MASS * (a**2 + b**2) / 12
-        ])
-
-        # --- 2) Quatre upper‑legs (barreaux verticals) ----------
-        # On approxime chaque barre comme un cylindre / bâton fin (axe y)
-        leg_len_u = 0.7 * b                  # ≈ 70 % hauteur tronc
-        I_bar_u   = UPPER_LEG_MASS * (leg_len_u**2) / 12
-        I_body += 4 * np.array([I_bar_u, 0, I_bar_u])   # autour de l'axe y
-
-        # --- 3) Quatre lower‑legs (barreaux verticaux) ----------
-        leg_len_l = 0.9 * b
-        I_bar_l   = LOWER_LEG_MASS * (leg_len_l**2) / 12
-        I_body += 4 * np.array([I_bar_l, 0, I_bar_l])
-
-        # totale :
-        mass_tot = BODY_MASS + 4 * (UPPER_LEG_MASS + LOWER_LEG_MASS)
-
-        return mass_tot, I_body
-
-    def _compute_local_center_of_mass(self):
-        masses = [BODY_MASS] + [UPPER_LEG_MASS] * 4 + [LOWER_LEG_MASS] * 4
-        part_centers = []
-        for part_idx in range(len(self.vertices) // 8):
-            part_vertices = np.array(self.vertices[part_idx * 8:(part_idx + 1) * 8], dtype=np.float64)
-            part_centers.append(part_vertices.mean(axis=0))
-        weighted_sum = sum(mass * center for mass, center in zip(masses, part_centers))
-        return weighted_sum / sum(masses)
