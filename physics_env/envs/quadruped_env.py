@@ -43,11 +43,15 @@ class QuadrupedEnv:
     ]
     CIRCLE_RADII = [0.5, 0.75, 1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20]
 
-    def __init__(self, rendering=True):
+    def __init__(self, rendering=True, headless=False):
         """Initialize the game, Pygame, and world objects."""
         pygame.init()
-        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-        pygame.display.set_caption("Moteur Physique 3D - Pygame")
+        self.headless = headless
+        if headless:
+            self.screen = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+        else:
+            self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+            pygame.display.set_caption("Moteur Physique 3D - Pygame")
         self.clock = pygame.time.Clock()
         self.rendering = rendering
 
@@ -99,6 +103,8 @@ class QuadrupedEnv:
 
     def handle_events(self):
         """Handle Pygame events. Returns False if the game should exit."""
+        if self.headless:
+            return True
         for event in pygame.event.get():
             if event.type == QUIT:
                 return False
@@ -295,7 +301,8 @@ class QuadrupedEnv:
         self.draw_checkpoint_circles()
         self.quadruped.draw_premium(self.screen, self.camera)
         self.render_ui(reward, done, step_time, state_value)
-        pygame.display.flip()
+        if not self.headless:
+            pygame.display.flip()
     
     def get_state(self):
         """Get the current state of the quadruped."""

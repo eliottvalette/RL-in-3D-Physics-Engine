@@ -24,6 +24,14 @@ python main.py
 ```bash
 clear
 python test.py
+python apps/play_policy.py
+```
+
+# Run deterministic benches
+```bash
+clear
+python apps/bench_headless.py --scenario settle --steps 600
+python apps/bench_viewer.py --scenario settle --steps 3000
 ```
 
 # Generate the code to send to the chat

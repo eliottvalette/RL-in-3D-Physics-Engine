@@ -1,14 +1,7 @@
-# train.py
-import os
-import numpy as np
-import time
-import traceback
 import pygame
 from pygame.locals import *
-from visualization import DataCollector
 from agent import QuadrupedAgent
 from physics_env.envs.quadruped_env import QuadrupedEnv
-from typing import List, Tuple
 from physics_env.core.config import *
 import torch
 
@@ -65,15 +58,23 @@ def test_agent(agent: QuadrupedAgent, env: QuadrupedEnv):
             env.consecutive_steps_below_critical_height = 0
             env.prev_radius = None
 
-if __name__ == "__main__":
-    agent = QuadrupedAgent(
+
+def build_test_agent():
+    return QuadrupedAgent(
         device='cpu',
         state_size=STATE_SIZE,
         action_size=ACTION_SIZE,
         gamma=GAMMA,
         learning_rate=ALPHA,
         load_model=True,
-        load_path=f"saved_models/quadruped_agent.pth",
+        load_path="saved_models/quadruped_agent.pth",
     )
+
+
+def main():
+    agent = build_test_agent()
     env = QuadrupedEnv(rendering=True)
     test_agent(agent, env)
+
+if __name__ == "__main__":
+    main()
