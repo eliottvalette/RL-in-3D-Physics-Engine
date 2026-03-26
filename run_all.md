@@ -29,8 +29,13 @@ python test.py
 # Run deterministic benches
 ```bash
 clear
+python apps/bench_headless.py --list
 python apps/bench_headless.py --scenario settle --steps 600
+python apps/bench_headless.py --scenario drop_flat --steps 600
+python apps/bench_headless.py --scenario slide_x --steps 600
+python apps/bench_headless.py --scenario front_legs_lifted --steps 600
 python apps/bench_viewer.py --scenario settle --steps 3000
+python apps/bench_viewer.py --scenario front_legs_lifted --steps 3000
 ```
 
 # Generate the code to send to the chat

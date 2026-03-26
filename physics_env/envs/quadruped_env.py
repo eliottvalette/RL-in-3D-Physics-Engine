@@ -43,10 +43,11 @@ class QuadrupedEnv:
     ]
     CIRCLE_RADII = [0.5, 0.75, 1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20]
 
-    def __init__(self, rendering=True, headless=False):
+    def __init__(self, rendering=True, headless=False, bench_mode=False):
         """Initialize the game, Pygame, and world objects."""
         pygame.init()
         self.headless = headless
+        self.bench_mode = bench_mode
         if headless:
             self.screen = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
         else:
@@ -197,6 +198,18 @@ class QuadrupedEnv:
 
         # Update quadruped
         update_quadruped(self.quadruped)
+
+        if self.bench_mode:
+            self.consecutive_steps_below_critical_height = 0
+            self.consecutive_steps_above_critical_height = 0
+            self.quadruped.too_high = False
+            self.quadruped.steps_since_too_high = 0
+            self.quadruped.too_low = False
+            self.quadruped.steps_since_too_low = 0
+            next_state = self.get_state()
+            end_step_time = time.time()
+            step_time = end_step_time - start_step_time
+            return next_state, 0.0, False, step_time
 
         next_state = self.get_state()
         # ---- REWARD ---
