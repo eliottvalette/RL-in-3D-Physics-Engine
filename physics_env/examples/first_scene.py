@@ -1,13 +1,13 @@
-# staircase.py
+# first_scene.py
 import pygame
 import numpy as np
 import math
 from pygame.locals import *
-from physics_env.config import *
-from physics_env.camera import Camera3D
-from physics_env.cube import Cube3D
-from physics_env.ground import Staircase
-from physics_env.update_functions import *
+from ..core.config import *
+from ..rendering.camera import Camera3D
+from ..legacy.cube import Cube3D
+from ..rendering.ground import Ground
+from ..legacy.update_functions import *
     
 
 # --- Initialisation Pygame ---
@@ -19,13 +19,12 @@ clock = pygame.time.Clock()
 # --- Objets du monde ---
 camera = Camera3D()
 cube = Cube3D(
-        position=np.array([1.2, 8.2, 1.2]),
-        x_length=8.0,
-        y_length=6.0,
-        z_length=4.0,
-        rotation=np.array([1.0, 1.0, 1.0])
+        position=np.array([1.0, 8.0, 1.0]),
+        x_length=5.0,
+        y_length=2.0,
+        z_length=3.0
     )
-staircase = Staircase(size=20, num_steps=10, step_width=1.0, step_height=1.0, step_depth=1.0, start_x=0, start_z=0)
+ground = Ground(size=20)
 
 # --- Contrôles caméra ---
 camera_speed = 0.1
@@ -73,17 +72,16 @@ while running:
         cube.reset()
     
     # --- Mise à jour physique ---
-    update_on_stairs(staircase, staircase.step_coordinates_flat, staircase.step_coordinates_vertical)
+    update_ground_only_simple(cube)
     
     # --- Rendu ---
     screen.fill(BLACK)
     
     # Dessiner le monde 3D
-    staircase.draw(screen, camera)
-    staircase.draw_axes(screen, camera)
-    staircase.draw_step_coordinates_vertical(screen, camera)  # Visualiser les coordonnées des contremarches
-    staircase.draw_step_coordinates_flat(screen, camera)  # Visualiser les coordonnées des marches
+    ground.draw(screen, camera)
+    ground.draw_axes(screen, camera)
     cube.draw(screen, camera)
+    cube.draw_bounding_box(screen, camera)
     
     # --- Interface utilisateur ---
     font = pygame.font.Font(None, 24)

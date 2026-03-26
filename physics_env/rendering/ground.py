@@ -1,7 +1,7 @@
 # ground.py
 import numpy as np
 import pygame
-from .config import *
+from ..core.config import *
 from .camera import Camera3D
 
 class Ground:

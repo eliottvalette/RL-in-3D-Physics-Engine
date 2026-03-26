@@ -1,6 +1,6 @@
 # main.py
 from train import main_training_loop
-from physics_env.config import set_seed, EPISODES, GAMMA, ALPHA, STATE_SIZE, ACTION_SIZE, RENDERING, PROFILING
+from physics_env.core.config import set_seed, EPISODES, GAMMA, ALPHA, STATE_SIZE, ACTION_SIZE, RENDERING, PROFILING
 from agent import QuadrupedAgent
 import torch
 import cProfile

@@ -9,7 +9,7 @@ import os
 import json
 import pandas as pd
 from datetime import datetime
-from physics_env.config import DEBUG_RL_VIZ, START_EPS, EPS_DECAY, EPS_MIN, PLOT_INTERVAL, SAVE_INTERVAL
+from physics_env.core.config import DEBUG_RL_VIZ, START_EPS, EPS_DECAY, EPS_MIN, PLOT_INTERVAL, SAVE_INTERVAL
 
 # Remove PLAYERS
 # PLAYERS = ['Player_0', 'Player_1', 'Player_2']

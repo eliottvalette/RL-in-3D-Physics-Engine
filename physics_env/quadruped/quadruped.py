@@ -1,8 +1,8 @@
 # quadruped.py
 import numpy as np
 import pygame
-from physics_env.config import *
-from .camera import Camera3D
+from ..core.config import *
+from ..rendering.camera import Camera3D
 import copy
 import math
 

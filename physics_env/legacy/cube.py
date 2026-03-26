@@ -1,8 +1,8 @@
 # cube.py
 import numpy as np
 import pygame
-from .config import *
-from .camera import Camera3D
+from ..core.config import *
+from ..rendering.camera import Camera3D
 import math
 
 class Cube3D:

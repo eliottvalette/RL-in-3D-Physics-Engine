@@ -1,14 +1,13 @@
-# tilted_cube.py
+# staircase.py
 import pygame
 import numpy as np
-import random as rd
 import math
 from pygame.locals import *
-from physics_env.config import *
-from physics_env.camera import Camera3D
-from physics_env.cube import Cube3D
-from physics_env.ground import Ground
-from physics_env.update_functions import *
+from ..core.config import *
+from ..rendering.camera import Camera3D
+from ..legacy.cube import Cube3D
+from ..rendering.ground import Staircase
+from ..legacy.update_functions import *
     
 
 # --- Initialisation Pygame ---
@@ -20,13 +19,13 @@ clock = pygame.time.Clock()
 # --- Objets du monde ---
 camera = Camera3D()
 cube = Cube3D(
-        position=np.array([1.0, 8.0, 1.0]),
-        x_length=5.0,
-        y_length=2.0,
-        z_length=3.0,
+        position=np.array([1.2, 8.2, 1.2]),
+        x_length=8.0,
+        y_length=6.0,
+        z_length=4.0,
         rotation=np.array([1.0, 1.0, 1.0])
     )
-ground = Ground(size=20)
+staircase = Staircase(size=20, num_steps=10, step_width=1.0, step_height=1.0, step_depth=1.0, start_x=0, start_z=0)
 
 # --- Contrôles caméra ---
 camera_speed = 0.1
@@ -74,14 +73,16 @@ while running:
         cube.reset()
     
     # --- Mise à jour physique ---
-    update_ground_only_complex(cube)
+    update_on_stairs(staircase, staircase.step_coordinates_flat, staircase.step_coordinates_vertical)
     
     # --- Rendu ---
     screen.fill(BLACK)
     
     # Dessiner le monde 3D
-    ground.draw(screen, camera)
-    ground.draw_axes(screen, camera)
+    staircase.draw(screen, camera)
+    staircase.draw_axes(screen, camera)
+    staircase.draw_step_coordinates_vertical(screen, camera)  # Visualiser les coordonnées des contremarches
+    staircase.draw_step_coordinates_flat(screen, camera)  # Visualiser les coordonnées des marches
     cube.draw(screen, camera)
     
     # --- Interface utilisateur ---
@@ -91,17 +92,14 @@ while running:
     pos_text = f"Position: ({cube.position[0]:.2f}, {cube.position[1]:.2f}, {cube.position[2]:.2f})"
     vel_text = f"Vitesse: ({cube.velocity[0]:.2f}, {cube.velocity[1]:.2f}, {cube.velocity[2]:.2f})"
     cam_text = f"Caméra: ({camera.position[0]:.1f}, {camera.position[1]:.1f}, {camera.position[2]:.1f})"
-    angular_vel_text = f"Rotation: ({cube.angular_velocity[0]:.2f}, {cube.angular_velocity[1]:.2f}, {cube.angular_velocity[2]:.2f})"
-
+    
     pos_surface = font.render(pos_text, True, WHITE)
     vel_surface = font.render(vel_text, True, WHITE)
     cam_surface = font.render(cam_text, True, WHITE)
-    angular_vel_surface = font.render(angular_vel_text, True, WHITE)
     
     screen.blit(pos_surface, (10, 10))
     screen.blit(vel_surface, (10, 35))
     screen.blit(cam_surface, (10, 60))
-    screen.blit(angular_vel_surface, (10, 85))
     
     # Instructions
     instructions = [

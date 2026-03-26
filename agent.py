@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 from model import QuadrupedActorModel, QuadrupedCriticModel
-from physics_env.config import DEBUG_RL_AGENT
+from physics_env.core.config import DEBUG_RL_AGENT
 import torch.nn.functional as F
 from collections import deque
 import random

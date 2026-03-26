@@ -4,11 +4,11 @@ import numpy as np
 import random as rd
 import math
 from pygame.locals import *
-from physics_env.config import *
-from physics_env.camera import Camera3D
-from physics_env.cube import Cube3D
-from physics_env.ground import FloorAndRamp
-from physics_env.update_functions import *
+from ..core.config import *
+from ..rendering.camera import Camera3D
+from ..legacy.cube import Cube3D
+from ..rendering.ground import FloorAndRamp
+from ..legacy.update_functions import *
     
 
 # --- Initialisation Pygame ---

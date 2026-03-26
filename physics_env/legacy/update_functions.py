@@ -3,7 +3,7 @@ import random
 from .cube import Cube3D
 from .joint import Joint
 import numpy as np
-from .config import *
+from ..core.config import *
 
 def update_ground_only_simple(object: Cube3D):
     # Mettre à jour les sommets du cube

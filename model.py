@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import random as rd
-from physics_env.config import DEBUG_RL_MODEL
+from physics_env.core.config import DEBUG_RL_MODEL
 
 class QuadrupedActorModel(nn.Module):
     """
@@ -134,7 +134,6 @@ class QuadrupedCriticModel(nn.Module):
             print(f"[MODEL] [CRITIC] V : mean = {V.mean()}, std = {V.std()}, min = {V.min()}, max = {V.max()}")
 
         return V
-
 
 
 

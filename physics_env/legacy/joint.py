@@ -3,8 +3,8 @@ import pygame
 import numpy as np
 import math
 from .cube import Cube3D
-from .camera import Camera3D
-from .config import *
+from ..rendering.camera import Camera3D
+from ..core.config import *
 
 class Joint:
     def __init__(self, object_1: Cube3D, object_2: Cube3D, face_1: int = -1, face_2: int = -1, corner_1: int = -1, corner_2: int = -1, initial_angle: float = 0.0, color: tuple[int, int, int] = (0, 255, 0)):

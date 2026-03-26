@@ -7,9 +7,9 @@ import pygame
 from pygame.locals import *
 from visualization import DataCollector
 from agent import QuadrupedAgent
-from physics_env.quadruped_env import QuadrupedEnv
+from physics_env.envs.quadruped_env import QuadrupedEnv
 from typing import List, Tuple
-from physics_env.config import *
+from physics_env.core.config import *
 import torch
 
 def test_agent(agent: QuadrupedAgent, env: QuadrupedEnv):
