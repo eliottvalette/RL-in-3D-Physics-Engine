@@ -35,6 +35,12 @@ RESTITUTION = 0.2    # Coefficient de restitution (0 = inélastique, 1 = parfait
 FRICTION = 0.5       # Coefficient de friction cinétique
 CONTACT_THRESHOLD_BASE = 0.05  # 0.05 unites ~= 1 cm
 CONTACT_THRESHOLD_MULTIPLIER = 1.5  # Multiplicateur pour le seuil dynamique
+CONTACT_SLOP = 0.01  # marge de penetration toleree ~= 2 mm
+CONTACT_BIAS = 0.20  # vitesse de correction de penetration
+CONTACT_POSITION_CORRECTION = 0.80
+NORMAL_SOLVER_ITERATIONS = 8
+MAX_CONTACT_POINTS = 8
+CONTACT_MANIFOLD_MIN_XZ_SPACING = 0.35
 
 # --- Limites de vitesse ---
 MAX_VELOCITY = 10.0

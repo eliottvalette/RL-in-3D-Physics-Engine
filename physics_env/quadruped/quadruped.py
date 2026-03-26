@@ -74,6 +74,7 @@ class Quadruped:
         self.elbow_angles = self.initial_elbow_angles.copy()
         self.shoulder_velocities = self.initial_shoulder_velocities.copy()
         self.elbow_velocities = self.initial_elbow_velocities.copy()
+        self.prev_vertices = None
         self._needs_update = True
         self.rotated_vertices = self.get_vertices()
     
@@ -87,6 +88,7 @@ class Quadruped:
         self.elbow_angles = self.initial_elbow_angles.copy()
         self.shoulder_velocities = self.initial_shoulder_velocities.copy()
         self.elbow_velocities = self.initial_elbow_velocities.copy()
+        self.prev_vertices = None
         self._needs_update = True
         self.rotated_vertices = self.get_vertices()
     
