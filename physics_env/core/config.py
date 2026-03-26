@@ -52,8 +52,12 @@ MAX_IMPULSE = 5.0
 MAX_AVERAGE_IMPULSE = 2.0
 
 # --- Angles d'articulations ---
-SHOULDER_DELTA = 0.05
-ELBOW_DELTA = 0.05
+SHOULDER_DELTA = 0.025
+ELBOW_DELTA = 0.025
+MOTOR_RESPONSE_GAIN = 0.25
+MOTOR_IDLE_BRAKE_GAIN = 0.35
+MOTOR_VELOCITY_DAMPING = 0.08
+MOTOR_STOP_EPS = 1e-4
 
 # --- Contact / Friction ----------------------------------------------------
 # 0.02 unites/s ~= 4 mm/s avec l'echelle ci-dessus.

@@ -346,35 +346,47 @@ class Quadruped:
         capped_angle = max(-math.pi/2, min(math.pi/2, angle))
         self.elbow_angles[leg_index] = capped_angle
         self._needs_update = True
+
+    def _update_joint_motor(self, angles, velocities, leg_index, target_speed):
+        target_speed = float(target_speed)
+        response_gain = MOTOR_RESPONSE_GAIN if abs(target_speed) > 1e-9 else MOTOR_IDLE_BRAKE_GAIN
+        current_velocity = float(velocities[leg_index])
+
+        current_velocity += (target_speed - current_velocity) * response_gain
+        current_velocity *= (1.0 - MOTOR_VELOCITY_DAMPING)
+
+        if abs(current_velocity) < MOTOR_STOP_EPS:
+            current_velocity = 0.0
+
+        new_angle = angles[leg_index] + current_velocity
+        capped_angle = max(-math.pi / 2, min(math.pi / 2, new_angle))
+        angles[leg_index] = capped_angle
+
+        if (
+            capped_angle >= math.pi / 2 and current_velocity > 0.0
+        ) or (
+            capped_angle <= -math.pi / 2 and current_velocity < 0.0
+        ):
+            current_velocity = 0.0
+
+        velocities[leg_index] = current_velocity
+        self._needs_update = True
     
     def adjust_shoulder_angle(self, leg_index, delta_angle):
-        random_noise = np.random.randn() * 0.01 - 0.005
-        if delta_angle > 0 :
-            self.shoulder_velocities[leg_index] = np.clip(self.shoulder_velocities[leg_index] + (delta_angle / self.motor_delay) + random_noise, 0, delta_angle)
-        elif delta_angle < 0:
-            self.shoulder_velocities[leg_index] = np.clip(self.shoulder_velocities[leg_index] + (delta_angle / self.motor_delay) + random_noise, delta_angle, 0)
-        else:
-            self.shoulder_velocities[leg_index] = 0
-
-        new_angle = self.shoulder_angles[leg_index] + self.shoulder_velocities[leg_index]
-        capped_angle = max(-math.pi/2, min(math.pi/2, new_angle))
-        self.shoulder_angles[leg_index] = capped_angle
-
-        if capped_angle in [math.pi/2, -math.pi/2]:
-            self.shoulder_velocities[leg_index] = 0
-        self._needs_update = True
+        self._update_joint_motor(
+            angles=self.shoulder_angles,
+            velocities=self.shoulder_velocities,
+            leg_index=leg_index,
+            target_speed=delta_angle,
+        )
     
     def adjust_elbow_angle(self, leg_index, delta_angle):
-        if delta_angle > 0:
-            self.elbow_velocities[leg_index] = np.clip(self.elbow_velocities[leg_index] + (delta_angle / self.motor_delay), 0, delta_angle)
-        elif delta_angle < 0:   
-            self.elbow_velocities[leg_index] = np.clip(self.elbow_velocities[leg_index] + (delta_angle / self.motor_delay), delta_angle, 0)
-        else:
-            self.elbow_velocities[leg_index] = 0
-        new_angle = self.elbow_angles[leg_index] + self.elbow_velocities[leg_index]
-        capped_angle = max(-math.pi/2, min(math.pi/2, new_angle))
-        self.elbow_angles[leg_index] = capped_angle
-        self._needs_update = True
+        self._update_joint_motor(
+            angles=self.elbow_angles,
+            velocities=self.elbow_velocities,
+            leg_index=leg_index,
+            target_speed=delta_angle,
+        )
     
     def get_state(self):
         """
