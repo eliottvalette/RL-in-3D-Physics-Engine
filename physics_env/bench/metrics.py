@@ -44,6 +44,44 @@ def _polygon_area(points):
     return abs(area) * 0.5
 
 
+def _point_to_segment_distance(point, seg_a, seg_b):
+    ax, az = seg_a
+    bx, bz = seg_b
+    px, pz = point
+    abx = bx - ax
+    abz = bz - az
+    ab_len_sq = abx * abx + abz * abz
+    if ab_len_sq <= 1e-12:
+        return math.dist(point, seg_a)
+    t = ((px - ax) * abx + (pz - az) * abz) / ab_len_sq
+    t = min(1.0, max(0.0, t))
+    closest = (ax + t * abx, az + t * abz)
+    return math.dist(point, closest)
+
+
+def _support_margin(polygon, point):
+    if len(polygon) == 0:
+        return None
+    if len(polygon) == 1:
+        return -math.dist(point, polygon[0])
+    if len(polygon) == 2:
+        return -_point_to_segment_distance(point, polygon[0], polygon[1])
+
+    inside = True
+    min_edge_distance = math.inf
+    for idx, a in enumerate(polygon):
+        b = polygon[(idx + 1) % len(polygon)]
+        edge_x = b[0] - a[0]
+        edge_z = b[1] - a[1]
+        rel_x = point[0] - a[0]
+        rel_z = point[1] - a[1]
+        cross = edge_x * rel_z - edge_z * rel_x
+        if cross < -1e-9:
+            inside = False
+        min_edge_distance = min(min_edge_distance, _point_to_segment_distance(point, a, b))
+    return min_edge_distance if inside else -min_edge_distance
+
+
 @dataclass
 class BenchMetrics:
     scenario: str
@@ -87,6 +125,9 @@ class BenchMetrics:
     avg_contact_count: float = 0.0
     final_support_polygon_area: float = 0.0
     max_support_polygon_area: float = 0.0
+    final_support_margin: float | None = None
+    min_support_margin: float | None = None
+    outside_support_frames: int = 0
     grounded_frames: int = 0
     first_contact_time_s: float | None = None
     grounded_height_mean: float = 0.0
@@ -118,12 +159,13 @@ class BenchMetrics:
     def update(self, env, reward: float, step_time: float, done: bool, env_done: bool | None = None):
         quadruped = env.quadruped
         position = quadruped.position
+        center_of_mass = quadruped.get_world_center_of_mass()
         velocity = quadruped.velocity
         rotation = quadruped.rotation
         omega = quadruped.angular_velocity
 
         translational_energy = 0.5 * quadruped.mass * float((velocity ** 2).sum())
-        rotational_energy = 0.5 * float((quadruped.I_body * (omega ** 2)).sum())
+        rotational_energy = 0.5 * float(omega @ (quadruped.get_world_inertia() @ omega))
         potential_energy = quadruped.mass * abs(float(GRAVITY[1])) * float(position[1])
         total_energy = translational_energy + rotational_energy + potential_energy
         min_vertex_y = float(quadruped.rotated_vertices[:, 1].min())
@@ -134,11 +176,18 @@ class BenchMetrics:
         tilt = pitch_abs + yaw_abs + roll_abs
         speed = float(math.sqrt(float((velocity ** 2).sum())))
         angular_speed = float(math.sqrt(float((omega ** 2).sum())))
-        contact_mask = quadruped.rotated_vertices[:, 1] <= CONTACT_THRESHOLD_BASE
-        contact_indices = tuple(int(idx) for idx in range(contact_mask.shape[0]) if bool(contact_mask[idx]))
-        contact_points = quadruped.rotated_vertices[contact_mask]
+        active_contact_indices = getattr(quadruped, "active_contact_indices", None)
+        if active_contact_indices is not None and len(active_contact_indices) > 0:
+            contact_indices = tuple(int(idx) for idx in active_contact_indices.tolist())
+            contact_points = quadruped.rotated_vertices[list(contact_indices)]
+        else:
+            contact_mask = quadruped.rotated_vertices[:, 1] <= CONTACT_THRESHOLD_BASE
+            contact_indices = tuple(int(idx) for idx in range(contact_mask.shape[0]) if bool(contact_mask[idx]))
+            contact_points = quadruped.rotated_vertices[contact_mask]
         contact_count = int(contact_points.shape[0])
-        support_polygon_area = _polygon_area(_convex_hull([(float(point[0]), float(point[2])) for point in contact_points]))
+        support_polygon = _convex_hull([(float(point[0]), float(point[2])) for point in contact_points])
+        support_polygon_area = _polygon_area(support_polygon)
+        support_margin = _support_margin(support_polygon, (float(center_of_mass[0]), float(center_of_mass[2])))
 
         if self.steps_executed == 0:
             self.initial_body_height = float(position[1])
@@ -179,6 +228,14 @@ class BenchMetrics:
         self.avg_contact_count += (contact_count - self.avg_contact_count) / self.steps_executed
         self.final_support_polygon_area = support_polygon_area
         self.max_support_polygon_area = max(self.max_support_polygon_area, support_polygon_area)
+        self.final_support_margin = support_margin
+        if support_margin is not None:
+            if self.min_support_margin is None:
+                self.min_support_margin = support_margin
+            else:
+                self.min_support_margin = min(self.min_support_margin, support_margin)
+            if support_margin < 0.0:
+                self.outside_support_frames += 1
 
         if contact_count > 0:
             self.grounded_frames += 1

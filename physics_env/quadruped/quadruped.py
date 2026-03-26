@@ -50,8 +50,10 @@ class Quadruped:
         self.initial_shoulder_velocities = self.shoulder_velocities.copy()
         self.initial_elbow_velocities = self.elbow_velocities.copy()
         self.prev_vertices = None
+        self.active_contact_indices = np.empty(0, dtype=np.int64)
         self._needs_update = True
         self.rotated_vertices = None
+        self.local_center_of_mass = self._compute_local_center_of_mass()
         
         # --- masse & inertie réalistes --------------------------
         self.mass, self.I_body = self._compute_mass_inertia()
@@ -75,6 +77,7 @@ class Quadruped:
         self.shoulder_velocities = self.initial_shoulder_velocities.copy()
         self.elbow_velocities = self.initial_elbow_velocities.copy()
         self.prev_vertices = None
+        self.active_contact_indices = np.empty(0, dtype=np.int64)
         self._needs_update = True
         self.rotated_vertices = self.get_vertices()
     
@@ -89,8 +92,51 @@ class Quadruped:
         self.shoulder_velocities = self.initial_shoulder_velocities.copy()
         self.elbow_velocities = self.initial_elbow_velocities.copy()
         self.prev_vertices = None
+        self.active_contact_indices = np.empty(0, dtype=np.int64)
         self._needs_update = True
         self.rotated_vertices = self.get_vertices()
+
+    def get_rotation_matrix(self):
+        rot_x, rot_y, rot_z = self.rotation
+        cos_x, sin_x = math.cos(rot_x), math.sin(rot_x)
+        cos_y, sin_y = math.cos(rot_y), math.sin(rot_y)
+        cos_z, sin_z = math.cos(rot_z), math.sin(rot_z)
+
+        rx = np.array([
+            [1, 0, 0],
+            [0, cos_x, -sin_x],
+            [0, sin_x, cos_x]
+        ])
+        ry = np.array([
+            [cos_y, 0, sin_y],
+            [0, 1, 0],
+            [-sin_y, 0, cos_y]
+        ])
+        rz = np.array([
+            [cos_z, -sin_z, 0],
+            [sin_z, cos_z, 0],
+            [0, 0, 1]
+        ])
+        return rz @ ry @ rx
+
+    def get_world_center_of_mass_offset(self):
+        return self.get_rotation_matrix() @ self.local_center_of_mass
+
+    def get_world_center_of_mass(self):
+        return self.position + self.get_world_center_of_mass_offset()
+
+    def get_center_of_mass_velocity(self):
+        return self.velocity + np.cross(self.angular_velocity, self.get_world_center_of_mass_offset())
+
+    def get_world_inverse_inertia(self):
+        rotation_matrix = self.get_rotation_matrix()
+        body_inverse_inertia = np.diag(np.divide(1.0, self.I_body, out=np.zeros_like(self.I_body), where=self.I_body != 0.0))
+        return rotation_matrix @ body_inverse_inertia @ rotation_matrix.T
+
+    def get_world_inertia(self):
+        rotation_matrix = self.get_rotation_matrix()
+        body_inertia = np.diag(self.I_body)
+        return rotation_matrix @ body_inertia @ rotation_matrix.T
     
     def get_vertices(self):
         """Retourne les vertices. Recalcule uniquement si nécessaire."""
@@ -104,31 +150,7 @@ class Quadruped:
         cos_el = np.cos(self.elbow_angles)
         sin_el = np.sin(self.elbow_angles)
 
-        # Précalcul de la matrice de rotation globale
-        rot_x, rot_y, rot_z = self.rotation
-        cos_x, sin_x = math.cos(rot_x), math.sin(rot_x)
-        cos_y, sin_y = math.cos(rot_y), math.sin(rot_y)
-        cos_z, sin_z = math.cos(rot_z), math.sin(rot_z)
-
-        # Matrices de rotation élémentaires
-        Rx = np.array([
-            [1, 0, 0],
-            [0, cos_x, -sin_x],
-            [0, sin_x, cos_x]
-        ])
-        Ry = np.array([
-            [cos_y, 0, sin_y],
-            [0, 1, 0],
-            [-sin_y, 0, cos_y]
-        ])
-        Rz = np.array([
-            [cos_z, -sin_z, 0],
-            [sin_z, cos_z, 0],
-            [0, 0, 1]
-        ])
-        
-        # Matrice de rotation globale précalculée
-        R_global = Rz @ Ry @ Rx
+        R_global = self.get_rotation_matrix()
 
         # Précalcul des matrices de rotation des articulations pour chaque jambe
         shoulder_rotations = []
@@ -499,3 +521,12 @@ class Quadruped:
         mass_tot = BODY_MASS + 4 * (UPPER_LEG_MASS + LOWER_LEG_MASS)
 
         return mass_tot, I_body
+
+    def _compute_local_center_of_mass(self):
+        masses = [BODY_MASS] + [UPPER_LEG_MASS] * 4 + [LOWER_LEG_MASS] * 4
+        part_centers = []
+        for part_idx in range(len(self.vertices) // 8):
+            part_vertices = np.array(self.vertices[part_idx * 8:(part_idx + 1) * 8], dtype=np.float64)
+            part_centers.append(part_vertices.mean(axis=0))
+        weighted_sum = sum(mass * center for mass, center in zip(masses, part_centers))
+        return weighted_sum / sum(masses)
