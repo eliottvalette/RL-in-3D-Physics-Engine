@@ -4,7 +4,9 @@ import random as rd
 import torch
 
 # --- Configuration ---
-FPS = 60 * 2
+PHYSICS_HZ = 120
+RENDER_FPS = 60
+FPS = RENDER_FPS  # alias legacy pour les viewers/exemples
 WINDOW_WIDTH = 1500
 WINDOW_HEIGHT = 800
 
@@ -24,7 +26,8 @@ DARK_GRAY = (64, 64, 64)
 UNIT_SCALE_M = 0.20
 
 GRAVITY = np.array([0, -9.81, 0])
-DT = 1/FPS
+DT = 1 / PHYSICS_HZ
+PHYSICS_STEPS_PER_RENDER = max(1, int(round(PHYSICS_HZ / RENDER_FPS)))
 
 # --- Stabilisation dynamique ------------------------------------
 G_STAB = 0.6          # gain d’amortissement (0‑1)
@@ -32,7 +35,7 @@ CONTACT_VERTICES_MAX = 32   # 4 lower‑legs × 8 sommets chacune
 
 # --- Constantes de collision ---
 RESTITUTION = 0.2    # Coefficient de restitution (0 = inélastique, 1 = parfaitement élastique)
-FRICTION = 0.5       # Coefficient de friction cinétique
+FRICTION = 1.0       # Adherence cible proche d'un contact caoutchouc / beton sec
 CONTACT_THRESHOLD_BASE = 0.05  # 0.05 unites ~= 1 cm
 CONTACT_THRESHOLD_MULTIPLIER = 1.5  # Multiplicateur pour le seuil dynamique
 CONTACT_SLOP = 0.01  # marge de penetration toleree ~= 2 mm

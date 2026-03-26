@@ -11,9 +11,9 @@ A minimalist 3‑D physics engine written with NumPy and Pygame is coupled with 
 ## 2. Environment
 
 ### 2.1 Physics Mini‑Engine  
-* 240 Hz fixed‑step integration (`DT = 1/240 s`).  
+* 120 Hz fixed‑step integration (`DT = 1/120 s`) with 60 FPS rendering.  
 * Vertices‑only collision detection against an infinite plane.  
-* Impulse‑based contact model with restitution $e=0.2$ and kinetic friction $\mu = 0.5$.  
+* Impulse‑based contact model with restitution $e=0.2$ and friction $\mu = 1.0$.  
 * Soft velocity caps and Polyak‑style inertia damping ensure numerical stability.  
 
 ### 2.2 State Representation  

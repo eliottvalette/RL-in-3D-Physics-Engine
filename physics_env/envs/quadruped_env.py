@@ -94,12 +94,25 @@ class QuadrupedEnv:
             if keys[K_p]:
                 print(f"state: {self.quadruped.get_state()}, len: {len(self.quadruped.get_state())}")
                 time.sleep(0.1)
-            
-            _, reward, done, step_time = self.step(shoulder_actions, elbow_actions, camera_actions, reset_actions)
+
+            reward = 0.0
+            done = False
+            step_time = 0.0
+            for substep_idx in range(PHYSICS_STEPS_PER_RENDER):
+                step_camera_actions = camera_actions if substep_idx == 0 else [0] * 10
+                step_reset_actions = reset_actions if substep_idx == 0 else [0, 0]
+                _, reward, done, substep_time = self.step(
+                    shoulder_actions,
+                    elbow_actions,
+                    step_camera_actions,
+                    step_reset_actions,
+                )
+                step_time += substep_time
+            step_time /= PHYSICS_STEPS_PER_RENDER
 
             if self.rendering:
                 self.render(reward, done, step_time)
-            self.clock.tick(FPS)
+            self.clock.tick(RENDER_FPS)
         pygame.quit()
 
     def handle_events(self):
@@ -387,11 +400,13 @@ class QuadrupedEnv:
 if __name__ == "__main__":
     import cProfile
 
-    profiler = cProfile.Profile()
-    profiler.enable()
+    if PROFILING:
+        profiler = cProfile.Profile()
+        profiler.enable()
 
     game = QuadrupedEnv(rendering=True)
     game.run()
 
-    profiler.disable()
-    profiler.dump_stats("profiling/physics_engine_only.prof")
+    if PROFILING:
+        profiler.disable()
+        profiler.dump_stats("profiling/physics_engine_only.prof")

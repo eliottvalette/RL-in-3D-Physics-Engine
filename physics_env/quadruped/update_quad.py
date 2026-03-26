@@ -67,8 +67,14 @@ def _select_contact_indices(vertices: np.ndarray, contact_threshold: float) -> n
     return np.array(selected, dtype=np.int64)
 
 
-def _point_velocity(quadruped: Quadruped, relative_position: np.ndarray) -> np.ndarray:
-    return quadruped.velocity + np.cross(quadruped.angular_velocity, relative_position)
+def _point_velocity(
+    quadruped: Quadruped,
+    com_offset_world: np.ndarray,
+    lever_arm_from_com: np.ndarray,
+    articulation_velocity_world: np.ndarray,
+) -> np.ndarray:
+    com_velocity = quadruped.velocity + np.cross(quadruped.angular_velocity, com_offset_world)
+    return com_velocity + np.cross(quadruped.angular_velocity, lever_arm_from_com) + articulation_velocity_world
 
 
 def _apply_impulse(
@@ -91,6 +97,7 @@ def _solve_contact_constraints(
     mass: float,
     inverse_inertia_world: np.ndarray,
     contact_threshold: float,
+    articulation_world_velocities: np.ndarray,
 ) -> np.ndarray:
     contact_indices = _select_contact_indices(current_vertices, contact_threshold)
     quadruped.active_contact_indices = contact_indices.copy()
@@ -110,8 +117,12 @@ def _solve_contact_constraints(
             max_penetration = max(max_penetration, penetration)
 
             lever_arm_from_com = point - com_position
-            com_velocity = quadruped.velocity + np.cross(quadruped.angular_velocity, com_offset_world)
-            vertex_velocity = com_velocity + np.cross(quadruped.angular_velocity, lever_arm_from_com)
+            vertex_velocity = _point_velocity(
+                quadruped=quadruped,
+                com_offset_world=com_offset_world,
+                lever_arm_from_com=lever_arm_from_com,
+                articulation_velocity_world=articulation_world_velocities[vertex_idx],
+            )
             normal_velocity = float(np.dot(vertex_velocity, GROUND_NORMAL))
 
             if penetration <= 0.0 and normal_velocity >= 0.0:
@@ -146,8 +157,12 @@ def _solve_contact_constraints(
             if accumulated_normal_impulses[local_idx] <= 0.0:
                 continue
 
-            com_velocity = quadruped.velocity + np.cross(quadruped.angular_velocity, com_offset_world)
-            vertex_velocity = com_velocity + np.cross(quadruped.angular_velocity, lever_arm_from_com)
+            vertex_velocity = _point_velocity(
+                quadruped=quadruped,
+                com_offset_world=com_offset_world,
+                lever_arm_from_com=lever_arm_from_com,
+                articulation_velocity_world=articulation_world_velocities[vertex_idx],
+            )
             tangent_velocity = vertex_velocity - GROUND_NORMAL * float(np.dot(vertex_velocity, GROUND_NORMAL))
             tangent_speed = float(np.linalg.norm(tangent_velocity))
 
@@ -212,10 +227,8 @@ def update_quadruped(quadruped: Quadruped):
     """
 
     quadruped._needs_update = True
-    current_vertices = quadruped.get_vertices()
-
-    mass = quadruped.mass
-    inverse_inertia_world = quadruped.get_world_inverse_inertia()
+    quadruped.get_vertices()
+    local_articulation_velocities = quadruped.get_local_articulation_velocities(DT)
 
     quadruped.velocity += GRAVITY * DT
     quadruped.position += quadruped.velocity * DT
@@ -223,6 +236,9 @@ def update_quadruped(quadruped: Quadruped):
 
     quadruped._needs_update = True
     current_vertices = quadruped.get_vertices()
+    mass = quadruped.mass
+    inverse_inertia_world = quadruped.get_world_inverse_inertia()
+    articulation_world_velocities = local_articulation_velocities @ quadruped.get_rotation_matrix().T
 
     contact_threshold = max(
         CONTACT_THRESHOLD_BASE,
@@ -235,6 +251,7 @@ def update_quadruped(quadruped: Quadruped):
         mass=mass,
         inverse_inertia_world=inverse_inertia_world,
         contact_threshold=contact_threshold,
+        articulation_world_velocities=articulation_world_velocities,
     )
 
     quadruped.velocity = limit_vector(quadruped.velocity, MAX_VELOCITY)
@@ -242,6 +259,7 @@ def update_quadruped(quadruped: Quadruped):
 
     quadruped._needs_update = True
     quadruped.prev_vertices = quadruped.get_vertices().copy()
+    quadruped.snapshot_local_geometry()
 
     if DEBUG_CONTACT:
         print(f"[VELOCITY] {quadruped.velocity}, [ANGULAR] {quadruped.angular_velocity}")

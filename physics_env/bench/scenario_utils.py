@@ -19,6 +19,7 @@ def sync_quadruped_state(env):
     env.quadruped.sync_orientation_from_euler()
     env.quadruped._needs_update = True
     env.quadruped.rotated_vertices = env.quadruped.get_vertices()
+    env.quadruped.snapshot_local_geometry()
 
 
 def set_base_state(env, position=None, rotation=None, velocity=None, angular_velocity=None):

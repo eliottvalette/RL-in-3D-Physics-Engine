@@ -70,6 +70,7 @@ class Quadruped:
         self.initial_shoulder_velocities = self.shoulder_velocities.copy()
         self.initial_elbow_velocities = self.elbow_velocities.copy()
         self.prev_vertices = None
+        self.prev_local_transformed_vertices = None
         self.active_contact_indices = np.empty(0, dtype=np.int64)
         self._needs_update = True
         self.rotated_vertices = None
@@ -82,6 +83,7 @@ class Quadruped:
         self.mass = BODY_MASS + 4 * (UPPER_LEG_MASS + LOWER_LEG_MASS)
         self.I_body = np.eye(3, dtype=np.float64)
         self.rotated_vertices = self.get_vertices()
+        self.prev_local_transformed_vertices = self.local_transformed_vertices.copy()
         self.motor_delay =  4
 
         # Danger zones
@@ -102,9 +104,11 @@ class Quadruped:
         self.shoulder_velocities = self.initial_shoulder_velocities.copy()
         self.elbow_velocities = self.initial_elbow_velocities.copy()
         self.prev_vertices = None
+        self.prev_local_transformed_vertices = None
         self.active_contact_indices = np.empty(0, dtype=np.int64)
         self._needs_update = True
         self.rotated_vertices = self.get_vertices()
+        self.prev_local_transformed_vertices = self.local_transformed_vertices.copy()
     
     def reset(self):
         self.position = self.initial_position.copy()
@@ -118,9 +122,11 @@ class Quadruped:
         self.shoulder_velocities = self.initial_shoulder_velocities.copy()
         self.elbow_velocities = self.initial_elbow_velocities.copy()
         self.prev_vertices = None
+        self.prev_local_transformed_vertices = None
         self.active_contact_indices = np.empty(0, dtype=np.int64)
         self._needs_update = True
         self.rotated_vertices = self.get_vertices()
+        self.prev_local_transformed_vertices = self.local_transformed_vertices.copy()
 
     def get_rotation_matrix(self):
         w, x, y, z = _quat_normalize(self.orientation)
@@ -169,6 +175,27 @@ class Quadruped:
         ], dtype=np.float64)
         self.orientation = _quat_normalize(_quat_multiply(delta_quaternion, self.orientation))
         self.sync_euler_from_orientation()
+
+    def get_local_articulation_velocities(self, dt):
+        if self.local_transformed_vertices is None:
+            self._needs_update = True
+            self.get_vertices()
+
+        current_vertices = self.local_transformed_vertices
+        if (
+            self.prev_local_transformed_vertices is None
+            or self.prev_local_transformed_vertices.shape != current_vertices.shape
+            or dt <= 0.0
+        ):
+            return np.zeros_like(current_vertices)
+
+        return (current_vertices - self.prev_local_transformed_vertices) / dt
+
+    def snapshot_local_geometry(self):
+        if self.local_transformed_vertices is None:
+            self._needs_update = True
+            self.get_vertices()
+        self.prev_local_transformed_vertices = self.local_transformed_vertices.copy()
 
     def _euler_to_quaternion(self, euler):
         roll, pitch, yaw = euler

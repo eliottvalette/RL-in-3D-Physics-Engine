@@ -2,7 +2,7 @@
 
 import pygame
 
-from physics_env.core.config import FPS, set_seed
+from physics_env.core.config import PHYSICS_STEPS_PER_RENDER, RENDER_FPS, set_seed
 from physics_env.envs.quadruped_env import QuadrupedEnv
 
 from .metrics import BenchMetrics
@@ -27,11 +27,10 @@ def run_bench(name: str = "settle", steps: int = 600, seed: int = 43, render: bo
     try:
         scenario.reset(env)
         running = True
+        camera_actions = [0] * 10
 
         for step_idx in range(steps):
-            camera_actions = [0] * 10
-
-            if render:
+            if render and step_idx % PHYSICS_STEPS_PER_RENDER == 0:
                 running = env.handle_events()
                 if not running:
                     break
@@ -43,9 +42,12 @@ def run_bench(name: str = "settle", steps: int = 600, seed: int = 43, render: bo
             bench_done = env_done if getattr(scenario, "stop_on_env_done", False) else False
             metrics.update(env, reward, step_time, bench_done, env_done=env_done)
 
-            if render:
+            should_render = render and (
+                (step_idx + 1) % PHYSICS_STEPS_PER_RENDER == 0 or step_idx == steps - 1
+            )
+            if should_render:
                 env.render(reward, env_done, step_time)
-                env.clock.tick(FPS)
+                env.clock.tick(RENDER_FPS)
 
             if scenario.should_stop(env, step_idx, env_done):
                 break
