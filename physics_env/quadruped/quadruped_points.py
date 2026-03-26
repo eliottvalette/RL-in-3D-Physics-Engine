@@ -1,6 +1,13 @@
 # quadruped_points.py
 import numpy as np
 
+from ..core.config import units_to_meters
+
+# Toutes les dimensions ci-dessous sont exprimees en unites moteur.
+# Avec UNIT_SCALE_M = 0.20 m :
+# - body length 4.0 -> 0.80 m
+# - body width 6.0 -> 1.20 m
+# - body height 1.0 -> 0.20 m
 BODY_LENGTH = 4.0
 BODY_WIDTH = 6.0
 BODY_HEIGHT = 1.0
@@ -11,6 +18,17 @@ LOWER_LEG_LENGTH = 0.6
 LOWER_LEG_WIDTH = 0.6
 LOWER_LEG_HEIGHT = 2.0
 Y_OFFSET = -2.5
+
+BODY_LENGTH_M = units_to_meters(BODY_LENGTH)
+BODY_WIDTH_M = units_to_meters(BODY_WIDTH)
+BODY_HEIGHT_M = units_to_meters(BODY_HEIGHT)
+UPPER_LEG_LENGTH_M = units_to_meters(UPPER_LEG_LENGTH)
+UPPER_LEG_WIDTH_M = units_to_meters(UPPER_LEG_WIDTH)
+UPPER_LEG_HEIGHT_M = units_to_meters(UPPER_LEG_HEIGHT)
+LOWER_LEG_LENGTH_M = units_to_meters(LOWER_LEG_LENGTH)
+LOWER_LEG_WIDTH_M = units_to_meters(LOWER_LEG_WIDTH)
+LOWER_LEG_HEIGHT_M = units_to_meters(LOWER_LEG_HEIGHT)
+Y_OFFSET_M = units_to_meters(Y_OFFSET)
 
 def create_body(length, width, height, y_offset):
     """

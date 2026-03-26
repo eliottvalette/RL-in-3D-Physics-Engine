@@ -18,6 +18,11 @@ GRAY = (128, 128, 128)
 DARK_GRAY = (64, 64, 64)
 
 # --- Physique ---
+# Convention d'unites:
+# 4.0 unites de longueur pour le body correspondent a 0.80 m.
+# Donc 1 unite moteur = 0.20 m dans le monde physique.
+UNIT_SCALE_M = 0.20
+
 GRAVITY = np.array([0, -9.81, 0])
 DT = 1/FPS
 
@@ -28,7 +33,7 @@ CONTACT_VERTICES_MAX = 32   # 4 lower‑legs × 8 sommets chacune
 # --- Constantes de collision ---
 RESTITUTION = 0.2    # Coefficient de restitution (0 = inélastique, 1 = parfaitement élastique)
 FRICTION = 0.5       # Coefficient de friction cinétique
-CONTACT_THRESHOLD_BASE = 0.05  # Seuil de base pour détecter le contact avec le sol
+CONTACT_THRESHOLD_BASE = 0.05  # 0.05 unites ~= 1 cm
 CONTACT_THRESHOLD_MULTIPLIER = 1.5  # Multiplicateur pour le seuil dynamique
 
 # --- Limites de vitesse ---
@@ -41,8 +46,9 @@ MAX_AVERAGE_IMPULSE = 2.0
 SHOULDER_DELTA = 0.05
 ELBOW_DELTA = 0.05
 
-# --- Contact / Friction ----------------------------------------------------
-SLIP_THRESHOLD = 0.02      # le pied reste « collé » tant que |v_t| < SLIP_THRESHOLD cm/s
+# --- Contact / Friction ----------------------------------------------------
+# 0.02 unites/s ~= 4 mm/s avec l'echelle ci-dessus.
+SLIP_THRESHOLD = 0.02
 STATIC_FRICTION_CAP  = 50.0     # impulsion maximale transmise au quadruped
 
 # ----- Debug Physics Simulation --------------------------------------
@@ -72,6 +78,14 @@ ACTION_SIZE = 8
 
 RENDERING = True
 PROFILING = False
+
+
+def units_to_meters(value):
+    return value * UNIT_SCALE_M
+
+
+def meters_to_units(value):
+    return value / UNIT_SCALE_M
 
 def set_seed(seed=42):
     rd.seed(seed)

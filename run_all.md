@@ -24,7 +24,6 @@ python main.py
 ```bash
 clear
 python test.py
-python apps/play_policy.py
 ```
 
 # Run deterministic benches
