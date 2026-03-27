@@ -94,6 +94,19 @@ class QuadrupedEnv:
         forward_tilt = abs(np.arctan2(body_up_world[0], body_up_world[1]))
         side_tilt = abs(np.arctan2(body_up_world[2], body_up_world[1]))
         return forward_tilt, side_tilt
+
+    def _get_joint_limit_progress(self):
+        shoulder_progress = np.clip(
+            self.consecutive_shoulder_limit_steps.astype(np.float32) / MAX_CONSECUTIVE_JOINT_LIMIT_STEPS,
+            0.0,
+            1.0,
+        )
+        elbow_progress = np.clip(
+            self.consecutive_elbow_limit_steps.astype(np.float32) / MAX_CONSECUTIVE_JOINT_LIMIT_STEPS,
+            0.0,
+            1.0,
+        )
+        return np.concatenate([shoulder_progress, elbow_progress], dtype=np.float32)
         
     def run(self):
         """Main game loop."""
@@ -110,7 +123,8 @@ class QuadrupedEnv:
                 reset_actions[1] = 1
 
             if keys[K_p]:
-                print(f"state: {self.quadruped.get_state()}, len: {len(self.quadruped.get_state())}")
+                state = self.get_state()
+                print(f"state: {state}, len: {len(state)}")
                 time.sleep(0.1)
 
             reward = 0.0
@@ -405,8 +419,10 @@ class QuadrupedEnv:
     
     def get_state(self):
         """Get the current state of the quadruped."""
-        state = self.quadruped.get_state()
-        return state
+        base_state = np.asarray(self.quadruped.get_state(), dtype=np.float32)
+        joint_limit_progress = self._get_joint_limit_progress()
+        state = np.concatenate([base_state, joint_limit_progress], dtype=np.float32)
+        return state.tolist()
 
     def render_ui(self, reward, done = False, step_time = 0.0, state_value = None):
         """Render the UI overlays (info and instructions)."""

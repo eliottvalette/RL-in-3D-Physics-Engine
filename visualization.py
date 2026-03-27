@@ -198,10 +198,6 @@ class DataCollector:
         with open(metrics_path, 'r') as f:
             metrics_data = json.load(f)
         self.visualizer.plot_metrics(metrics_data)
-        self.visualizer.plot_losses(metrics_data)
-        self.visualizer.plot_reward_safety_breakdown(metrics_data)
-        self.visualizer.plot_state_value_distributions(metrics_data)
-        self.visualizer.plot_steps_per_episode(metrics_data)
         plt.close('all')
 
 class Visualizer:
@@ -255,6 +251,18 @@ class Visualizer:
             values = [episode_metrics.get(key) for key in keys]
             if any(value is not None for value in values):
                 return float(sum(value or 0.0 for value in values))
+            return None
+
+        if metric_name == "td_target_mean":
+            values = episode_metrics.get("td_targets")
+            if values:
+                return float(np.mean(values))
+            return None
+
+        if metric_name == "state_value_mean":
+            values = episode_metrics.get("state_values")
+            if values:
+                return float(np.mean(values))
             return None
 
         value = episode_metrics.get(metric_name)
@@ -379,7 +387,42 @@ class Visualizer:
 
     def plot_metrics(self, metrics_data, dpi=500):
         """
-        Dashboard groupé par thèmes.
+        Dashboard principal mono-curve 4x3.
+        """
+        fig, axes = plt.subplots(3, 4, figsize=(24, 16))
+        axes = axes.flatten()
+
+        mono_specs = [
+            ("reward_norm_mean", "Normalized Reward", "Reward", self.palette["cyan"]),
+            ("steps_count", "Steps / Episode", "Steps", self.palette["blue"]),
+            ("epsilon", "Exploration", "Value", self.palette["magenta"]),
+            ("entropy", "Policy Entropy", "Value", self.palette["green"]),
+            ("critic_loss", "Critic Loss", "Loss", self.palette["blue"]),
+            ("actor_loss", "Actor Loss", "Loss", self.palette["red"]),
+            ("distance_reward", "Distance Reward", "Reward", self.palette["orange"]),
+            ("z_speed_reward", "Forward Speed Reward", "Reward", self.palette["teal"]),
+            ("sparse_reward", "Sparse Reward", "Reward", self.palette["yellow"]),
+            ("tilt_penalty", "Tilt Penalty", "Penalty", self.palette["orange"]),
+            ("gait_reward", "Gait Penalty", "Penalty", self.palette["magenta"]),
+            ("forward_tilt_deg", "Forward Tilt", "Degrees", self.palette["orange"]),
+        ]
+
+        for ax, (metric_name, title, ylabel, color) in zip(axes, mono_specs):
+            episodes, values = self._sorted_metric_series(metrics_data, metric_name)
+            self._plot_timeseries(ax, episodes, values, title, ylabel, color)
+
+        fig.suptitle("RL Training Dashboard", fontsize=22, color="#F5F7FA", y=0.992)
+        plt.tight_layout(rect=[0, 0, 1, 0.985])
+        plt.savefig(os.path.join(self.viz_dir, 'RL_metrics.jpg'), dpi=dpi, bbox_inches='tight')
+        plt.close()
+        self.plot_metrics_grouped(metrics_data, dpi)
+        self.plot_losses(metrics_data, dpi)
+        self.plot_state_value_distributions(metrics_data, dpi)
+        self.plot_steps_per_episode(metrics_data, dpi)
+
+    def plot_metrics_grouped(self, metrics_data, dpi=500):
+        """
+        Dashboard groupé par familles de signaux.
         """
         fig, axes = plt.subplots(3, 2, figsize=(22, 18))
         axes = axes.flatten()
@@ -461,12 +504,8 @@ class Visualizer:
 
         fig.suptitle("RL Training Dashboard", fontsize=22, color="#F5F7FA", y=0.992)
         plt.tight_layout(rect=[0, 0, 1, 0.985])
-        plt.savefig(os.path.join(self.viz_dir, 'RL_metrics.jpg'), dpi=dpi, bbox_inches='tight')
+        plt.savefig(os.path.join(self.viz_dir, 'RL_metrics_group.jpg'), dpi=dpi, bbox_inches='tight')
         plt.close()
-        self.plot_losses(metrics_data, dpi)
-        self.plot_reward_safety_breakdown(metrics_data, dpi)
-        self.plot_state_value_distributions(metrics_data, dpi)
-        self.plot_steps_per_episode(metrics_data, dpi)
 
     def plot_losses(self, metrics_data, dpi=500):
         """
@@ -503,66 +542,6 @@ class Visualizer:
         fig.suptitle("Actor / Critic Losses", fontsize=20, color="#F5F7FA", y=0.995)
         plt.tight_layout(rect=[0, 0, 1, 0.985])
         plt.savefig(os.path.join(self.viz_dir, 'losses.jpg'), dpi=dpi, bbox_inches='tight')
-        plt.close()
-
-    def plot_reward_safety_breakdown(self, metrics_data, dpi=500):
-        """
-        5e PNG focalisé sur reward, penalties, tilt et done rates.
-        """
-        fig, axes = plt.subplots(2, 2, figsize=(18, 12))
-        axes = axes.flatten()
-
-        self._plot_grouped_series(
-            axes[0],
-            metrics_data,
-            "Reward Components",
-            "Reward",
-            [
-                ("reward_norm_mean", "Normalized Reward", self.palette["cyan"]),
-                ("distance_reward", "Distance", self.palette["orange"]),
-                ("z_speed_reward", "Forward Speed", self.palette["teal"]),
-                ("sparse_reward", "Sparse", self.palette["yellow"]),
-            ],
-        )
-        self._plot_grouped_series(
-            axes[1],
-            metrics_data,
-            "Penalty Components",
-            "Penalty",
-            [
-                ("penalty_sum", "Penalty Sum", self.palette["red"]),
-                ("tilt_penalty", "Tilt Penalty", self.palette["orange"]),
-                ("gait_reward", "Gait Penalty", self.palette["magenta"]),
-            ],
-        )
-        self._plot_grouped_series(
-            axes[2],
-            metrics_data,
-            "Tilt Angles",
-            "Degrees",
-            [
-                ("forward_tilt_deg", "Forward Tilt", self.palette["orange"]),
-                ("side_tilt_deg", "Side Tilt", self.palette["blue"]),
-            ],
-        )
-        self._plot_grouped_series(
-            axes[3],
-            metrics_data,
-            "Done Rates",
-            "Rate",
-            [
-                ("done_reason_critical_tilt", "Critical Tilt", self.palette["red"]),
-                ("done_reason_joint_limit_timeout", "Joint Limit", self.palette["magenta"]),
-                ("done_reason_too_high", "Too High", self.palette["yellow"]),
-                ("done_reason_max_steps", "Max Steps", self.palette["green"]),
-            ],
-            y_limits=(-0.02, 1.02),
-            robust_ylim=False,
-        )
-
-        fig.suptitle("Reward and Safety Breakdown", fontsize=20, color="#F5F7FA", y=0.995)
-        plt.tight_layout(rect=[0, 0, 1, 0.985])
-        plt.savefig(os.path.join(self.viz_dir, 'reward_safety_breakdown.jpg'), dpi=dpi, bbox_inches='tight')
         plt.close()
 
     def plot_state_value_distributions(self, metrics_data, dpi=500):
@@ -666,9 +645,5 @@ if __name__ == "__main__":
         metrics_data = json.load(f)
 
     visualizer.plot_metrics(metrics_data)
-    visualizer.plot_losses(metrics_data)
-    visualizer.plot_reward_safety_breakdown(metrics_data)
-    visualizer.plot_state_value_distributions(metrics_data)
-    visualizer.plot_steps_per_episode(metrics_data)
 
     plt.close('all')

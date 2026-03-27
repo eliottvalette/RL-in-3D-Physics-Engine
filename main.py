@@ -19,7 +19,7 @@ agent = QuadrupedAgent(
     action_size=ACTION_SIZE,
     gamma=GAMMA,
     learning_rate=ALPHA,
-    load_model=True,
+    load_model=False,
     load_path=f"saved_models/quadruped_agent.pth",
 )
 
