@@ -199,6 +199,7 @@ class DataCollector:
             metrics_data = json.load(f)
         self.visualizer.plot_metrics(metrics_data)
         self.visualizer.plot_losses(metrics_data)
+        self.visualizer.plot_reward_safety_breakdown(metrics_data)
         self.visualizer.plot_state_value_distributions(metrics_data)
         self.visualizer.plot_steps_per_episode(metrics_data)
         plt.close('all')
@@ -241,14 +242,35 @@ class Visualizer:
             "teal": "#2EC4B6",
         }
 
+    def _metric_value_from_episode(self, episode_metrics, metric_name):
+        if metric_name == "positive_reward_sum":
+            keys = ("distance_reward", "z_speed_reward", "sparse_reward")
+            values = [episode_metrics.get(key) for key in keys]
+            if any(value is not None for value in values):
+                return float(sum(value or 0.0 for value in values))
+            return None
+
+        if metric_name == "penalty_sum":
+            keys = ("tilt_penalty", "gait_reward")
+            values = [episode_metrics.get(key) for key in keys]
+            if any(value is not None for value in values):
+                return float(sum(value or 0.0 for value in values))
+            return None
+
+        value = episode_metrics.get(metric_name)
+        if value is None:
+            return None
+        return float(value)
+
     def _sorted_metric_series(self, metrics_data, metric_name):
         episodes = []
         values = []
         for episode_num in sorted(metrics_data.keys(), key=lambda value: int(value)):
             episode_metrics = metrics_data[episode_num]
-            if metric_name in episode_metrics and episode_metrics[metric_name] is not None:
+            metric_value = self._metric_value_from_episode(episode_metrics, metric_name)
+            if metric_value is not None:
                 episodes.append(int(episode_num))
-                values.append(float(episode_metrics[metric_name]))
+                values.append(metric_value)
         return np.array(episodes, dtype=np.int32), np.array(values, dtype=np.float64)
 
     def _rolling_average(self, values, window=None):
@@ -328,54 +350,121 @@ class Visualizer:
             bbox=dict(boxstyle="round,pad=0.3", facecolor="#151B23", edgecolor="#333A45", alpha=0.9),
         )
 
+    def _plot_grouped_series(self, ax, metrics_data, title, ylabel, series_specs, y_limits=None, robust_ylim=True):
+        has_data = False
+        all_values = []
+        for metric_name, label, color in series_specs:
+            episodes, values = self._sorted_metric_series(metrics_data, metric_name)
+            if len(values) == 0:
+                continue
+            has_data = True
+            smooth = self._rolling_average(values)
+            ax.plot(episodes, values, color=color, alpha=0.16, linewidth=0.9)
+            ax.plot(episodes, smooth, color=color, linewidth=2.2, label=label)
+            all_values.extend(values.tolist())
+
+        self._style_axis(ax, title, ylabel=ylabel)
+        if not has_data:
+            ax.text(0.5, 0.5, "No data", ha="center", va="center", color="#888888", transform=ax.transAxes)
+            return
+
+        if y_limits is not None:
+            ax.set_ylim(*y_limits)
+        elif robust_ylim:
+            ylim = self._robust_ylim(all_values)
+            if ylim is not None:
+                ax.set_ylim(*ylim)
+
+        ax.legend(frameon=True, facecolor="#151B23", edgecolor="#333A45", fontsize=9, ncol=2)
+
     def plot_metrics(self, metrics_data, dpi=500):
         """
-        Génère un dashboard dark plus riche et robuste aux outliers.
+        Dashboard groupé par thèmes.
         """
-        metrics_to_plot = [
-            ("reward_norm_mean", "Normalized Reward", "Reward", self.palette["cyan"]),
-            ("steps_count", "Steps / Episode", "Steps", self.palette["yellow"]),
-            ("epsilon", "Exploration", "Epsilon", self.palette["magenta"]),
-            ("entropy", "Policy Entropy", "Entropy", self.palette["green"]),
-            ("critic_loss", "Critic Loss", "Loss", self.palette["blue"]),
-            ("actor_loss", "Actor Loss", "Loss", self.palette["red"]),
-            ("distance_reward", "Distance Reward", "Reward", self.palette["orange"]),
-            ("z_speed_reward", "Forward Speed Reward", "Reward", self.palette["teal"]),
-            ("sparse_reward", "Sparse Reward", "Reward", self.palette["yellow"]),
-            ("tilt_penalty", "Tilt Penalty", "Penalty", self.palette["red"]),
-            ("gait_reward", "Gait Penalty", "Penalty", self.palette["magenta"]),
-            ("forward_tilt_deg", "Forward Tilt", "Degrees", self.palette["orange"]),
-            ("side_tilt_deg", "Side Tilt", "Degrees", self.palette["blue"]),
-            ("done_reason_critical_tilt", "Critical Tilt Done Rate", "Rate", self.palette["red"]),
-            ("done_reason_joint_limit_timeout", "Joint Limit Done Rate", "Rate", self.palette["magenta"]),
-            ("done_reason_too_high", "Too High Done Rate", "Rate", self.palette["yellow"]),
-        ]
-
-        fig, axes = plt.subplots(4, 4, figsize=(26, 20))
+        fig, axes = plt.subplots(3, 2, figsize=(22, 18))
         axes = axes.flatten()
 
-        for idx, (metric_name, display_name, ylabel, color) in enumerate(metrics_to_plot):
-            episodes, values = self._sorted_metric_series(metrics_data, metric_name)
-            self._plot_timeseries(
-                ax=axes[idx],
-                episodes=episodes,
-                values=values,
-                title=display_name,
-                ylabel=ylabel,
-                color=color,
-                robust_ylim=metric_name != "epsilon",
-            )
-            if metric_name == "epsilon":
-                axes[idx].set_ylim(-0.02, 1.02)
+        self._plot_grouped_series(
+            axes[0],
+            metrics_data,
+            "Reward Overview",
+            "Reward",
+            [
+                ("reward_norm_mean", "Normalized Reward", self.palette["cyan"]),
+                ("positive_reward_sum", "Positive Reward Sum", self.palette["green"]),
+                ("distance_reward", "Distance", self.palette["orange"]),
+                ("z_speed_reward", "Forward Speed", self.palette["teal"]),
+                ("sparse_reward", "Sparse", self.palette["yellow"]),
+            ],
+        )
+        self._plot_grouped_series(
+            axes[1],
+            metrics_data,
+            "Penalty Overview",
+            "Penalty",
+            [
+                ("penalty_sum", "Penalty Sum", self.palette["red"]),
+                ("tilt_penalty", "Tilt Penalty", self.palette["orange"]),
+                ("gait_reward", "Gait Penalty", self.palette["magenta"]),
+            ],
+        )
+        self._plot_grouped_series(
+            axes[2],
+            metrics_data,
+            "Tilt Angles",
+            "Degrees",
+            [
+                ("forward_tilt_deg", "Forward Tilt", self.palette["orange"]),
+                ("side_tilt_deg", "Side Tilt", self.palette["blue"]),
+            ],
+        )
+        self._plot_grouped_series(
+            axes[3],
+            metrics_data,
+            "Done Rates",
+            "Rate",
+            [
+                ("done_reason_critical_tilt", "Critical Tilt", self.palette["red"]),
+                ("done_reason_joint_limit_timeout", "Joint Limit", self.palette["magenta"]),
+                ("done_reason_too_high", "Too High", self.palette["yellow"]),
+                ("done_reason_max_steps", "Max Steps", self.palette["green"]),
+            ],
+            y_limits=(-0.02, 1.02),
+            robust_ylim=False,
+        )
 
-        for idx in range(len(metrics_to_plot), len(axes)):
-            axes[idx].axis("off")
+        steps_episodes, steps_values = self._sorted_metric_series(metrics_data, "steps_count")
+        if len(steps_values) > 0:
+            smooth_steps = self._rolling_average(steps_values, window=min(30, max(10, len(steps_values) // 15)))
+            axes[4].scatter(steps_episodes, steps_values, color=self.palette["blue"], alpha=0.30, s=12)
+            axes[4].plot(steps_episodes, smooth_steps, color=self.palette["blue"], linewidth=2.6, label="Steps")
+            axes[4].axhline(np.mean(steps_values), color=self.palette["yellow"], linestyle="--", linewidth=1.5, label="Mean")
+            ylim = self._robust_ylim(steps_values, lower_q=1.0, upper_q=99.0, pad_ratio=0.08)
+            if ylim is not None:
+                axes[4].set_ylim(*ylim)
+            self._style_axis(axes[4], "Episode Length", ylabel="Steps")
+            axes[4].legend(frameon=True, facecolor="#151B23", edgecolor="#333A45", fontsize=9)
+        else:
+            self._style_axis(axes[4], "Episode Length", ylabel="Steps")
+            axes[4].text(0.5, 0.5, "No data", ha="center", va="center", color="#888888", transform=axes[4].transAxes)
 
-        fig.suptitle("RL Training Dashboard", fontsize=22, color="#F5F7FA", y=0.995)
+        self._plot_grouped_series(
+            axes[5],
+            metrics_data,
+            "Training Context",
+            "Value",
+            [
+                ("epsilon", "Exploration", self.palette["magenta"]),
+                ("entropy", "Entropy", self.palette["green"]),
+            ],
+        )
+
+        fig.suptitle("RL Training Dashboard", fontsize=22, color="#F5F7FA", y=0.992)
         plt.tight_layout(rect=[0, 0, 1, 0.985])
         plt.savefig(os.path.join(self.viz_dir, 'RL_metrics.jpg'), dpi=dpi, bbox_inches='tight')
         plt.close()
         self.plot_losses(metrics_data, dpi)
+        self.plot_reward_safety_breakdown(metrics_data, dpi)
         self.plot_state_value_distributions(metrics_data, dpi)
         self.plot_steps_per_episode(metrics_data, dpi)
 
@@ -414,6 +503,66 @@ class Visualizer:
         fig.suptitle("Actor / Critic Losses", fontsize=20, color="#F5F7FA", y=0.995)
         plt.tight_layout(rect=[0, 0, 1, 0.985])
         plt.savefig(os.path.join(self.viz_dir, 'losses.jpg'), dpi=dpi, bbox_inches='tight')
+        plt.close()
+
+    def plot_reward_safety_breakdown(self, metrics_data, dpi=500):
+        """
+        5e PNG focalisé sur reward, penalties, tilt et done rates.
+        """
+        fig, axes = plt.subplots(2, 2, figsize=(18, 12))
+        axes = axes.flatten()
+
+        self._plot_grouped_series(
+            axes[0],
+            metrics_data,
+            "Reward Components",
+            "Reward",
+            [
+                ("reward_norm_mean", "Normalized Reward", self.palette["cyan"]),
+                ("distance_reward", "Distance", self.palette["orange"]),
+                ("z_speed_reward", "Forward Speed", self.palette["teal"]),
+                ("sparse_reward", "Sparse", self.palette["yellow"]),
+            ],
+        )
+        self._plot_grouped_series(
+            axes[1],
+            metrics_data,
+            "Penalty Components",
+            "Penalty",
+            [
+                ("penalty_sum", "Penalty Sum", self.palette["red"]),
+                ("tilt_penalty", "Tilt Penalty", self.palette["orange"]),
+                ("gait_reward", "Gait Penalty", self.palette["magenta"]),
+            ],
+        )
+        self._plot_grouped_series(
+            axes[2],
+            metrics_data,
+            "Tilt Angles",
+            "Degrees",
+            [
+                ("forward_tilt_deg", "Forward Tilt", self.palette["orange"]),
+                ("side_tilt_deg", "Side Tilt", self.palette["blue"]),
+            ],
+        )
+        self._plot_grouped_series(
+            axes[3],
+            metrics_data,
+            "Done Rates",
+            "Rate",
+            [
+                ("done_reason_critical_tilt", "Critical Tilt", self.palette["red"]),
+                ("done_reason_joint_limit_timeout", "Joint Limit", self.palette["magenta"]),
+                ("done_reason_too_high", "Too High", self.palette["yellow"]),
+                ("done_reason_max_steps", "Max Steps", self.palette["green"]),
+            ],
+            y_limits=(-0.02, 1.02),
+            robust_ylim=False,
+        )
+
+        fig.suptitle("Reward and Safety Breakdown", fontsize=20, color="#F5F7FA", y=0.995)
+        plt.tight_layout(rect=[0, 0, 1, 0.985])
+        plt.savefig(os.path.join(self.viz_dir, 'reward_safety_breakdown.jpg'), dpi=dpi, bbox_inches='tight')
         plt.close()
 
     def plot_state_value_distributions(self, metrics_data, dpi=500):
@@ -518,6 +667,7 @@ if __name__ == "__main__":
 
     visualizer.plot_metrics(metrics_data)
     visualizer.plot_losses(metrics_data)
+    visualizer.plot_reward_safety_breakdown(metrics_data)
     visualizer.plot_state_value_distributions(metrics_data)
     visualizer.plot_steps_per_episode(metrics_data)
 
