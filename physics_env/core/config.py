@@ -63,6 +63,12 @@ MOTOR_STOP_EPS = 1e-4
 # 0.02 unites/s ~= 4 mm/s avec l'echelle ci-dessus.
 SLIP_THRESHOLD = 0.02
 STATIC_FRICTION_CAP  = 50.0     # impulsion maximale transmise au quadruped
+TILT_DEADZONE = np.deg2rad(8.0)
+TILT_PENALTY_COEF = 1.5
+CRITICAL_TILT_ANGLE = np.deg2rad(30.0)
+MAX_CONSECUTIVE_CRITICAL_TILT_STEPS = 45
+JOINT_LIMIT_THRESHOLD = np.pi / 2 * 0.9
+MAX_CONSECUTIVE_JOINT_LIMIT_STEPS = 50
 
 # ----- Debug Physics Simulation --------------------------------------
 DEBUG_CONTACT = False       

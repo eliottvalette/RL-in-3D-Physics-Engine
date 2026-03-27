@@ -51,6 +51,7 @@ def run_episode(env: QuadrupedEnv, agent: QuadrupedAgent, epsilon: float, render
 
         # Exécuter l'action dans l'environnement
         next_state, reward, done, step_time = env.step(shoulders, elbows)
+        data_collector.add_metrics(env.last_reward_components.copy())
 
         # Stocker l'expérience
         agent.remember(state, action_vec, reward, done, next_state)
@@ -74,8 +75,13 @@ def run_episode(env: QuadrupedEnv, agent: QuadrupedAgent, epsilon: float, render
     print(f"[TRAIN] Nombre de steps: {steps_count}")
 
     metrics = agent.train_model(epsilon)
+    final_done_reason = env.last_done_reason if done else "max_steps"
     # Ajouter le nombre de steps aux métriques
     metrics['steps_count'] = steps_count
+    metrics['done_reason_too_high'] = 1.0 if final_done_reason == "too_high" else 0.0
+    metrics['done_reason_critical_tilt'] = 1.0 if final_done_reason == "critical_tilt" else 0.0
+    metrics['done_reason_joint_limit_timeout'] = 1.0 if final_done_reason == "joint_limit_timeout" else 0.0
+    metrics['done_reason_max_steps'] = 1.0 if final_done_reason == "max_steps" else 0.0
     data_collector.add_metrics(metrics)
     data_collector.save_episode(episode)
 

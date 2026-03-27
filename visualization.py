@@ -216,57 +216,163 @@ class Visualizer:
         self.plot_interval = plot_interval
         self.save_interval = save_interval
         os.makedirs(self.viz_dir, exist_ok=True)
-    
+        plt.style.use("dark_background")
+        sns.set_theme(
+            style="darkgrid",
+            rc={
+                "axes.facecolor": "#0e1117",
+                "figure.facecolor": "#0e1117",
+                "grid.color": "#222a",
+                "axes.edgecolor": "#555",
+                "text.color": "#dddddd",
+                "axes.labelcolor": "#dddddd",
+                "xtick.color": "#bbbbbb",
+                "ytick.color": "#bbbbbb",
+            },
+        )
+        self.palette = {
+            "cyan": "#7BDFF2",
+            "blue": "#60A5FA",
+            "green": "#80ED99",
+            "yellow": "#FFD166",
+            "orange": "#F77F00",
+            "red": "#FF6B6B",
+            "magenta": "#C77DFF",
+            "teal": "#2EC4B6",
+        }
+
+    def _sorted_metric_series(self, metrics_data, metric_name):
+        episodes = []
+        values = []
+        for episode_num in sorted(metrics_data.keys(), key=lambda value: int(value)):
+            episode_metrics = metrics_data[episode_num]
+            if metric_name in episode_metrics and episode_metrics[metric_name] is not None:
+                episodes.append(int(episode_num))
+                values.append(float(episode_metrics[metric_name]))
+        return np.array(episodes, dtype=np.int32), np.array(values, dtype=np.float64)
+
+    def _rolling_average(self, values, window=None):
+        if len(values) == 0:
+            return np.array([], dtype=np.float64)
+        if window is None:
+            window = max(5, min(40, len(values) // 20 or 1))
+        return pd.Series(values).rolling(window=window, min_periods=1).mean().to_numpy()
+
+    def _robust_ylim(self, values, lower_q=2.0, upper_q=98.0, pad_ratio=0.12):
+        finite = np.asarray(values, dtype=np.float64)
+        finite = finite[np.isfinite(finite)]
+        if finite.size == 0:
+            return None
+
+        low = float(np.percentile(finite, lower_q))
+        high = float(np.percentile(finite, upper_q))
+        if np.isclose(low, high):
+            spread = max(1.0, abs(low) * 0.1)
+            return low - spread, high + spread
+
+        pad = (high - low) * pad_ratio
+        return low - pad, high + pad
+
+    def _combined_robust_xlim(self, *arrays, lower_q=1.0, upper_q=99.0, pad_ratio=0.08):
+        finite_arrays = [np.asarray(arr, dtype=np.float64) for arr in arrays if len(arr) > 0]
+        if not finite_arrays:
+            return None
+        merged = np.concatenate(finite_arrays)
+        merged = merged[np.isfinite(merged)]
+        if merged.size == 0:
+            return None
+
+        low = float(np.percentile(merged, lower_q))
+        high = float(np.percentile(merged, upper_q))
+        if np.isclose(low, high):
+            spread = max(1.0, abs(low) * 0.1)
+            return low - spread, high + spread
+
+        pad = (high - low) * pad_ratio
+        return low - pad, high + pad
+
+    def _style_axis(self, ax, title, xlabel="Episode", ylabel=None):
+        ax.set_title(title, fontsize=13, pad=10, color="#F5F7FA")
+        ax.set_xlabel(xlabel)
+        if ylabel is not None:
+            ax.set_ylabel(ylabel)
+        ax.grid(True, alpha=0.28, linewidth=0.8)
+        ax.set_facecolor("#0e1117")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    def _plot_timeseries(self, ax, episodes, values, title, ylabel, color, robust_ylim=True):
+        if len(values) == 0:
+            ax.text(0.5, 0.5, "No data", ha="center", va="center", color="#888888", transform=ax.transAxes)
+            self._style_axis(ax, title, ylabel=ylabel)
+            return
+
+        smooth = self._rolling_average(values)
+        ax.plot(episodes, values, color=color, alpha=0.20, linewidth=1.0)
+        ax.plot(episodes, smooth, color=color, linewidth=2.4)
+        ax.scatter(episodes[-1], smooth[-1], color=color, s=18, zorder=3)
+
+        if robust_ylim:
+            ylim = self._robust_ylim(values)
+            if ylim is not None:
+                ax.set_ylim(*ylim)
+
+        self._style_axis(ax, title, ylabel=ylabel)
+        ax.text(
+            0.015,
+            0.92,
+            f"last={values[-1]:.3f}\nmean={np.mean(values):.3f}",
+            transform=ax.transAxes,
+            fontsize=9,
+            color="#C9D1D9",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="#151B23", edgecolor="#333A45", alpha=0.9),
+        )
+
     def plot_metrics(self, metrics_data, dpi=500):
         """
-        Génère des visualisations des métriques d'entraînement RL à partir du fichier metrics_history.json
+        Génère un dashboard dark plus riche et robuste aux outliers.
         """
-        fig = plt.figure(figsize=(24, 20))
-        pastel_colors = ['#003049', '#006DAA', '#D62828', '#F77F00', '#FCBF49', '#EAE2B7']
         metrics_to_plot = [
-            ('reward_norm_mean', 'Reward Normalisée Moyenne', None, None),
-            ('critic_loss', 'Critic Loss (MSE entre Q-Value et TD-Target)', None, None),
-            ('actor_loss', 'Actor Loss (Log-Prob * Advantage)', None, None),
-            ('entropy', 'Entropie', None, None),
-            ('total_loss', 'Actor Loss + Critic Loss', None, None),
-            ('epsilon', 'Epsilon (Exploration)', 1, 0),
+            ("reward_norm_mean", "Normalized Reward", "Reward", self.palette["cyan"]),
+            ("steps_count", "Steps / Episode", "Steps", self.palette["yellow"]),
+            ("epsilon", "Exploration", "Epsilon", self.palette["magenta"]),
+            ("entropy", "Policy Entropy", "Entropy", self.palette["green"]),
+            ("critic_loss", "Critic Loss", "Loss", self.palette["blue"]),
+            ("actor_loss", "Actor Loss", "Loss", self.palette["red"]),
+            ("distance_reward", "Distance Reward", "Reward", self.palette["orange"]),
+            ("z_speed_reward", "Forward Speed Reward", "Reward", self.palette["teal"]),
+            ("sparse_reward", "Sparse Reward", "Reward", self.palette["yellow"]),
+            ("tilt_penalty", "Tilt Penalty", "Penalty", self.palette["red"]),
+            ("gait_reward", "Gait Penalty", "Penalty", self.palette["magenta"]),
+            ("forward_tilt_deg", "Forward Tilt", "Degrees", self.palette["orange"]),
+            ("side_tilt_deg", "Side Tilt", "Degrees", self.palette["blue"]),
+            ("done_reason_critical_tilt", "Critical Tilt Done Rate", "Rate", self.palette["red"]),
+            ("done_reason_joint_limit_timeout", "Joint Limit Done Rate", "Rate", self.palette["magenta"]),
+            ("done_reason_too_high", "Too High Done Rate", "Rate", self.palette["yellow"]),
         ]
-        for idx, (metric_name, display_name, y_max, y_min) in enumerate(metrics_to_plot):
-            ax = plt.subplot(2, 3, idx + 1)
-            episodes = []
-            values = []
-            for episode_num, episode_metrics in metrics_data.items():
-                if metric_name in episode_metrics and episode_metrics[metric_name] is not None:
-                    episodes.append(int(episode_num))
-                    values.append(float(episode_metrics[metric_name]))
-            window = self.plot_interval * 3
-            if len(values) > 0:
-                rolling_avg = pd.Series(values).rolling(window=window, min_periods=1).mean()
-                ax.plot(episodes, rolling_avg, label='Agent', color=pastel_colors[0], linewidth=2)
-            ax.set_title(f'Evolution de {display_name}')
-            ax.set_xlabel('Episode')
-            ax.set_ylabel(display_name)
-            ax.legend()
-            ax.set_ylim(y_min, y_max)
-            ax.set_facecolor('#F0F0F0')
-            ax.grid(True, alpha=0.3)
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-        plt.rcParams.update({
-            'figure.facecolor': '#FFFFFF',
-            'axes.facecolor': '#F8F9FA',
-            'axes.grid': True,
-            'grid.alpha': 0.3,
-            'axes.labelsize': 10,
-            'axes.titlesize': 12,
-            'xtick.labelsize': 10,
-            'ytick.labelsize': 10,
-            'lines.linewidth': 2,
-            'font.family': 'sans-serif',
-            'axes.spines.top': False,
-            'axes.spines.right': False
-        })
-        plt.tight_layout()
+
+        fig, axes = plt.subplots(4, 4, figsize=(26, 20))
+        axes = axes.flatten()
+
+        for idx, (metric_name, display_name, ylabel, color) in enumerate(metrics_to_plot):
+            episodes, values = self._sorted_metric_series(metrics_data, metric_name)
+            self._plot_timeseries(
+                ax=axes[idx],
+                episodes=episodes,
+                values=values,
+                title=display_name,
+                ylabel=ylabel,
+                color=color,
+                robust_ylim=metric_name != "epsilon",
+            )
+            if metric_name == "epsilon":
+                axes[idx].set_ylim(-0.02, 1.02)
+
+        for idx in range(len(metrics_to_plot), len(axes)):
+            axes[idx].axis("off")
+
+        fig.suptitle("RL Training Dashboard", fontsize=22, color="#F5F7FA", y=0.995)
+        plt.tight_layout(rect=[0, 0, 1, 0.985])
         plt.savefig(os.path.join(self.viz_dir, 'RL_metrics.jpg'), dpi=dpi, bbox_inches='tight')
         plt.close()
         self.plot_losses(metrics_data, dpi)
@@ -275,37 +381,44 @@ class Visualizer:
 
     def plot_losses(self, metrics_data, dpi=500):
         """
-        Trace actor_loss et critic_loss sur le même graphique.
+        Trace les losses en full-scale + zoom robuste.
         """
-        episodes = []
-        actor_losses = []
-        critic_losses = []
-        for episode_num, episode_metrics in metrics_data.items():
-            if 'actor_loss' in episode_metrics and episode_metrics['actor_loss'] is not None:
-                episodes.append(int(episode_num))
-                actor_losses.append(float(episode_metrics['actor_loss']))
-            else:
-                actor_losses.append(np.nan)
-            if 'critic_loss' in episode_metrics and episode_metrics['critic_loss'] is not None:
-                critic_losses.append(float(episode_metrics['critic_loss']))
-            else:
-                critic_losses.append(np.nan)
-        plt.figure(figsize=(12, 7))
-        plt.plot(episodes, pd.Series(actor_losses).rolling(window=10, min_periods=1).mean(), label='Actor Loss', color='#D62828')
-        plt.plot(episodes, pd.Series(critic_losses).rolling(window=10, min_periods=1).mean(), label='Critic Loss', color='#003049')
-        plt.xlabel('Episode')
-        plt.ylabel('Loss')
-        plt.title('Actor & Critic Losses')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
+        actor_episodes, actor_losses = self._sorted_metric_series(metrics_data, "actor_loss")
+        critic_episodes, critic_losses = self._sorted_metric_series(metrics_data, "critic_loss")
+
+        fig, axes = plt.subplots(2, 2, figsize=(18, 12))
+        axes = axes.flatten()
+
+        for idx, (episodes, values, name, color) in enumerate([
+            (actor_episodes, actor_losses, "Actor Loss", self.palette["red"]),
+            (critic_episodes, critic_losses, "Critic Loss", self.palette["blue"]),
+        ]):
+            raw_ax = axes[idx * 2]
+            zoom_ax = axes[idx * 2 + 1]
+            smooth = self._rolling_average(values)
+
+            raw_ax.plot(episodes, values, color=color, alpha=0.25, linewidth=1.0)
+            raw_ax.plot(episodes, smooth, color=color, linewidth=2.5)
+            if len(values) > 0:
+                linthresh = max(1e-2, np.nanpercentile(np.abs(values), 60) * 0.05)
+                raw_ax.set_yscale("symlog", linthresh=linthresh)
+            self._style_axis(raw_ax, f"{name} Full Scale", ylabel="Loss")
+
+            zoom_ax.plot(episodes, values, color=color, alpha=0.18, linewidth=1.0)
+            zoom_ax.plot(episodes, smooth, color=color, linewidth=2.5)
+            ylim = self._robust_ylim(values)
+            if ylim is not None:
+                zoom_ax.set_ylim(*ylim)
+            self._style_axis(zoom_ax, f"{name} Zoomed", ylabel="Loss")
+
+        fig.suptitle("Actor / Critic Losses", fontsize=20, color="#F5F7FA", y=0.995)
+        plt.tight_layout(rect=[0, 0, 1, 0.985])
         plt.savefig(os.path.join(self.viz_dir, 'losses.jpg'), dpi=dpi, bbox_inches='tight')
         plt.close()
 
     def plot_state_value_distributions(self, metrics_data, dpi=500):
         """
-        Histogrammes des td_targets (true state value) et state_values (prédits par le critic).
-        Affiche deux sous-graphiques côte à côte : un pour td_targets, un pour state_values.
+        Histogrammes dark des TD targets et state values avec stats de résumé.
         """
         all_td_targets = []
         all_state_values = []
@@ -315,67 +428,79 @@ class Visualizer:
             if 'state_values' in episode_metrics and episode_metrics['state_values'] is not None:
                 all_state_values.extend(episode_metrics['state_values'])
 
-        fig, axes = plt.subplots(2, 1, figsize=(14, 6), sharey=True)
-        
-        sns.histplot(all_td_targets, color='#F77F00', label='TD Targets (True State Value)', kde=True, stat='density', bins=40, alpha=0.6, ax=axes[0])
-        axes[0].set_xlabel('TD Target Value')
-        axes[0].set_ylabel('Density')
-        axes[0].set_title('Distribution des TD Targets')
-        axes[0].legend()
-        axes[0].set_xlim(min(all_td_targets+all_state_values), max(all_td_targets+all_state_values))
+        fig, axes = plt.subplots(2, 1, figsize=(16, 9), sharex=True)
+        xlim = self._combined_robust_xlim(all_td_targets, all_state_values)
+        plots = [
+            (axes[0], np.asarray(all_td_targets, dtype=np.float64), "TD Targets", self.palette["orange"]),
+            (axes[1], np.asarray(all_state_values, dtype=np.float64), "Critic State Values", self.palette["blue"]),
+        ]
 
-        sns.histplot(all_state_values, color='#006DAA', label='State Values (Critic)', kde=True, stat='density', bins=40, alpha=0.6, ax=axes[1])
-        axes[1].set_xlabel('State Value (Critic)')
-        axes[1].set_ylabel('Density')
-        axes[1].set_title('Distribution des State Values (Critic)')
-        axes[1].legend()
-        axes[1].set_xlim(min(all_td_targets+all_state_values), max(all_td_targets+all_state_values))
+        for ax, values, title, color in plots:
+            sns.histplot(values, color=color, kde=True, stat='density', bins=50, alpha=0.55, ax=ax)
+            ax.axvline(np.mean(values), color="#F5F7FA", linestyle="--", linewidth=1.3, alpha=0.8)
+            ax.axvline(np.median(values), color="#BBBBBB", linestyle=":", linewidth=1.3, alpha=0.8)
+            if xlim is not None:
+                ax.set_xlim(*xlim)
+            self._style_axis(ax, title, xlabel="Value", ylabel="Density")
+            ax.text(
+                0.015,
+                0.87,
+                f"mean={np.mean(values):.2f}\nmedian={np.median(values):.2f}\nstd={np.std(values):.2f}",
+                transform=ax.transAxes,
+                fontsize=9,
+                color="#C9D1D9",
+                bbox=dict(boxstyle="round,pad=0.3", facecolor="#151B23", edgecolor="#333A45", alpha=0.9),
+            )
 
-        plt.tight_layout()
+        fig.suptitle("Value Distributions", fontsize=20, color="#F5F7FA", y=0.995)
+        plt.tight_layout(rect=[0, 0, 1, 0.985])
         plt.savefig(os.path.join(self.viz_dir, 'state_value_distributions.jpg'), dpi=dpi, bbox_inches='tight')
         plt.close()
 
     def plot_steps_per_episode(self, metrics_data, dpi=500):
         """
-        Graphique dédié au nombre de steps par épisode avec une ligne de tendance.
+        Graphique dark du nombre de steps par épisode avec tendance lisible.
         """
         episodes = []
         steps_counts = []
-        
-        for episode_num, episode_metrics in metrics_data.items():
+        for episode_num in sorted(metrics_data.keys(), key=lambda value: int(value)):
+            episode_metrics = metrics_data[episode_num]
             if 'steps_count' in episode_metrics and episode_metrics['steps_count'] is not None:
                 episodes.append(int(episode_num))
                 steps_counts.append(float(episode_metrics['steps_count']))
-        
+
         if not steps_counts:
             print("[VIZ] Aucune donnée de steps_count trouvée")
             return
-        
-        plt.figure(figsize=(14, 8))
-        
-        # Graphique principal avec les points
-        plt.plot(episodes, steps_counts, 'o-', color='#006DAA', alpha=0.6, linewidth=1, markersize=3, label='Steps par épisode')
-        
-        # Ligne de tendance (moyenne mobile)
-        window = min(20, len(steps_counts) // 4)  # Fenêtre adaptative
-        if len(steps_counts) > window:
-            rolling_avg = pd.Series(steps_counts).rolling(window=window, min_periods=1).mean()
-            plt.plot(episodes, rolling_avg, color='#D62828', linewidth=3, label=f'Moyenne mobile ({window} épisodes)')
-        
-        # Ligne horizontale pour la moyenne globale
-        mean_steps = np.mean(steps_counts)
-        plt.axhline(y=mean_steps, color='#F77F00', linestyle='--', linewidth=2, label=f'Moyenne globale: {mean_steps:.1f}')
-        
+
+        episodes_array = np.asarray(episodes, dtype=np.int32)
+        steps_array = np.asarray(steps_counts, dtype=np.float64)
+        rolling_avg = self._rolling_average(steps_array, window=min(30, max(10, len(steps_array) // 15)))
+
+        plt.figure(figsize=(16, 9))
+        plt.scatter(episodes_array, steps_array, color=self.palette["blue"], alpha=0.35, s=12, label="Episode Steps")
+        plt.plot(episodes_array, rolling_avg, color=self.palette["red"], linewidth=2.8, label="Rolling Mean")
+        plt.axhline(np.mean(steps_array), color=self.palette["yellow"], linestyle="--", linewidth=1.8, label=f"Mean = {np.mean(steps_array):.1f}")
+
+        ylim = self._robust_ylim(steps_array, lower_q=1.0, upper_q=99.0, pad_ratio=0.08)
+        if ylim is not None:
+            plt.ylim(*ylim)
+
         plt.xlabel('Episode')
-        plt.ylabel('Nombre de Steps')
-        plt.title('Évolution du Nombre de Steps par Épisode')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # Ajouter des statistiques en texte
-        stats_text = f'Min: {min(steps_counts):.0f} | Max: {max(steps_counts):.0f} | Écart-type: {np.std(steps_counts):.1f}'
-        plt.figtext(0.5, 0.02, stats_text, ha='center', fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
-        
+        plt.ylabel('Steps')
+        plt.title('Steps per Episode')
+        plt.legend(frameon=True, facecolor="#151B23", edgecolor="#333A45")
+        plt.grid(True, alpha=0.28)
+        plt.figtext(
+            0.5,
+            0.02,
+            f"min={np.min(steps_array):.0f} | max={np.max(steps_array):.0f} | std={np.std(steps_array):.1f}",
+            ha='center',
+            fontsize=10,
+            color="#D9E2EC",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="#151B23", edgecolor="#333A45", alpha=0.95),
+        )
+
         plt.tight_layout()
         plt.savefig(os.path.join(self.viz_dir, 'steps_per_episode.jpg'), dpi=dpi, bbox_inches='tight')
         plt.close()

@@ -76,6 +76,24 @@ class QuadrupedEnv:
         self.gait_reward_coef = 0.5
         self.consecutive_steps_below_critical_height = 0
         self.consecutive_steps_above_critical_height = 0
+        self.consecutive_steps_critical_tilt = 0
+        self.consecutive_shoulder_limit_steps = np.zeros(4, dtype=np.int32)
+        self.consecutive_elbow_limit_steps = np.zeros(4, dtype=np.int32)
+        self.last_reward_components = {}
+        self.last_done_reason = "not_started"
+
+    def _reset_safety_counters(self):
+        self.consecutive_steps_below_critical_height = 0
+        self.consecutive_steps_above_critical_height = 0
+        self.consecutive_steps_critical_tilt = 0
+        self.consecutive_shoulder_limit_steps.fill(0)
+        self.consecutive_elbow_limit_steps.fill(0)
+
+    def _compute_body_tilt_angles(self):
+        body_up_world = self.quadruped.get_rotation_matrix()[:, 1]
+        forward_tilt = abs(np.arctan2(body_up_world[0], body_up_world[1]))
+        side_tilt = abs(np.arctan2(body_up_world[2], body_up_world[1]))
+        return forward_tilt, side_tilt
         
     def run(self):
         """Main game loop."""
@@ -203,22 +221,33 @@ class QuadrupedEnv:
             self.circles_passed.clear()
             self.prev_potential = None
             self.prev_radius    = None
+            self._reset_safety_counters()
         if reset_actions[1]:
             self.quadruped.reset()
             self.circles_passed.clear()
             self.prev_potential = None
             self.prev_radius    = None
+            self._reset_safety_counters()
 
         # Update quadruped
         update_quadruped(self.quadruped)
 
         if self.bench_mode:
-            self.consecutive_steps_below_critical_height = 0
-            self.consecutive_steps_above_critical_height = 0
+            self._reset_safety_counters()
             self.quadruped.too_high = False
             self.quadruped.steps_since_too_high = 0
             self.quadruped.too_low = False
             self.quadruped.steps_since_too_low = 0
+            self.last_reward_components = {
+                "distance_reward": 0.0,
+                "z_speed_reward": 0.0,
+                "sparse_reward": 0.0,
+                "tilt_penalty": 0.0,
+                "gait_reward": 0.0,
+                "forward_tilt_deg": 0.0,
+                "side_tilt_deg": 0.0,
+            }
+            self.last_done_reason = "bench_mode"
             next_state = self.get_state()
             end_step_time = time.time()
             step_time = end_step_time - start_step_time
@@ -242,14 +271,9 @@ class QuadrupedEnv:
         z_speed_reward = z_speed * 0.5
 
         # ----------  c)  Pénalité d'inclinaison du corps (pénalité brute) --------------
-        pitch, yaw, roll = self.quadruped.rotation
-        pitch = ((pitch + np.pi) % (2 * np.pi)) - np.pi
-        yaw = ((yaw + np.pi) % (2 * np.pi)) - np.pi
-        roll = ((roll + np.pi) % (2 * np.pi)) - np.pi
-        if (abs(pitch) + abs(yaw) + abs(roll) > 0.1):
-            tilt_penalty = -self.rot_penalty_coef * (abs(pitch) + abs(yaw) + abs(roll)) 
-        else:
-            tilt_penalty = 0.0
+        forward_tilt, side_tilt = self._compute_body_tilt_angles()
+        tilt_excess = max(0.0, forward_tilt - TILT_DEADZONE) + max(0.0, side_tilt - TILT_DEADZONE)
+        tilt_penalty = -TILT_PENALTY_COEF * tilt_excess
         
         # ----------  d)  Récompense principale --------------
         sparse_reward = 0.0
@@ -290,14 +314,53 @@ class QuadrupedEnv:
 
         if below_critical_height:
             self.consecutive_steps_below_critical_height += 1
+            self.consecutive_steps_above_critical_height = 0
         elif above_critical_height:
             self.consecutive_steps_above_critical_height += 1
+            self.consecutive_steps_below_critical_height = 0
         else:
             self.consecutive_steps_below_critical_height = 0
             self.consecutive_steps_above_critical_height = 0
 
-        if self.consecutive_steps_below_critical_height > 50 or self.consecutive_steps_above_critical_height > 20:
+        critically_tilted = max(forward_tilt, side_tilt) > CRITICAL_TILT_ANGLE
+        if critically_tilted:
+            self.consecutive_steps_critical_tilt += 1
+        else:
+            self.consecutive_steps_critical_tilt = 0
+
+        shoulder_near_limit = np.abs(self.quadruped.shoulder_angles) > JOINT_LIMIT_THRESHOLD
+        elbow_near_limit = np.abs(self.quadruped.elbow_angles) > JOINT_LIMIT_THRESHOLD
+        self.consecutive_shoulder_limit_steps = np.where(
+            shoulder_near_limit,
+            self.consecutive_shoulder_limit_steps + 1,
+            0,
+        )
+        self.consecutive_elbow_limit_steps = np.where(
+            elbow_near_limit,
+            self.consecutive_elbow_limit_steps + 1,
+            0,
+        )
+        joint_limit_timeout = (
+            int(self.consecutive_shoulder_limit_steps.max()) > MAX_CONSECUTIVE_JOINT_LIMIT_STEPS
+            or int(self.consecutive_elbow_limit_steps.max()) > MAX_CONSECUTIVE_JOINT_LIMIT_STEPS
+        )
+
+        done_reason = "running"
+
+        # Le garde-fou "too_high" sert a couper les emballements numeriques.
+        # Le signal "too_low" reste utile pour la penalite et l'etat, mais n'est
+        # plus considere comme une mort automatique.
+        # Un tilt critique soutenu ou une articulation coincee en butee restent
+        # en revanche de vrais echecs de locomotion.
+        if self.consecutive_steps_above_critical_height > 20:
             done = True
+            done_reason = "too_high"
+        elif self.consecutive_steps_critical_tilt > MAX_CONSECUTIVE_CRITICAL_TILT_STEPS:
+            done = True
+            done_reason = "critical_tilt"
+        elif joint_limit_timeout:
+            done = True
+            done_reason = "joint_limit_timeout"
         else:
             done = False 
 
@@ -313,6 +376,16 @@ class QuadrupedEnv:
                   + sparse_reward
                   + tilt_penalty
                   + gait_reward)
+        self.last_reward_components = {
+            "distance_reward": float(distance_reward),
+            "z_speed_reward": float(z_speed_reward),
+            "sparse_reward": float(sparse_reward),
+            "tilt_penalty": float(tilt_penalty),
+            "gait_reward": float(gait_reward),
+            "forward_tilt_deg": float(np.degrees(forward_tilt)),
+            "side_tilt_deg": float(np.degrees(side_tilt)),
+        }
+        self.last_done_reason = done_reason
         # -----------------------------------------------------
         end_step_time = time.time()
         step_time = end_step_time - start_step_time
