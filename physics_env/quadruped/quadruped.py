@@ -349,11 +349,21 @@ class Quadruped:
 
     def _update_joint_motor(self, angles, velocities, leg_index, target_speed):
         target_speed = float(target_speed)
-        response_gain = MOTOR_RESPONSE_GAIN if abs(target_speed) > 1e-9 else MOTOR_IDLE_BRAKE_GAIN
+        ease_factor = 1.0 - float(np.clip(MOTOR_DIFFICULTY, 0.0, 1.0))
+        if abs(target_speed) > 1e-9:
+            response_gain = MOTOR_RESPONSE_GAIN + ease_factor * MOTOR_RESPONSE_DIFFICULTY_BOOST
+        else:
+            response_gain = MOTOR_IDLE_BRAKE_GAIN + ease_factor * MOTOR_BRAKE_DIFFICULTY_BOOST
+        response_gain = float(np.clip(response_gain, 0.0, 1.0))
+        velocity_damping = float(np.clip(
+            MOTOR_VELOCITY_DAMPING + ease_factor * MOTOR_DAMPING_DIFFICULTY_BOOST,
+            0.0,
+            0.95,
+        ))
         current_velocity = float(velocities[leg_index])
 
         current_velocity += (target_speed - current_velocity) * response_gain
-        current_velocity *= (1.0 - MOTOR_VELOCITY_DAMPING)
+        current_velocity *= (1.0 - velocity_damping)
 
         if abs(current_velocity) < MOTOR_STOP_EPS:
             current_velocity = 0.0

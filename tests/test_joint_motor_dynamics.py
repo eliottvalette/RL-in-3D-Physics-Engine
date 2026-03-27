@@ -3,6 +3,7 @@ import unittest
 import numpy as np
 
 from physics_env.core.config import ELBOW_DELTA, MOTOR_STOP_EPS, SHOULDER_DELTA
+import physics_env.quadruped.quadruped as quadruped_module
 from physics_env.quadruped.quadruped import Quadruped
 from physics_env.quadruped.quadruped_points import create_quadruped_vertices, get_quadruped_vertices
 
@@ -56,6 +57,28 @@ class JointMotorDynamicsTest(unittest.TestCase):
             quadruped.adjust_elbow_angle(0, -ELBOW_DELTA)
 
         self.assertLess(float(quadruped.elbow_velocities[0]), 0.0)
+
+    def test_lower_motor_difficulty_brakes_faster(self):
+        base_quadruped = make_quadruped()
+        easy_quadruped = make_quadruped()
+
+        previous_difficulty = quadruped_module.MOTOR_DIFFICULTY
+        try:
+            quadruped_module.MOTOR_DIFFICULTY = 1.0
+            for _ in range(8):
+                base_quadruped.adjust_shoulder_angle(0, SHOULDER_DELTA)
+            base_quadruped.adjust_shoulder_angle(0, 0.0)
+            base_velocity = abs(float(base_quadruped.shoulder_velocities[0]))
+
+            quadruped_module.MOTOR_DIFFICULTY = 0.0
+            for _ in range(8):
+                easy_quadruped.adjust_shoulder_angle(0, SHOULDER_DELTA)
+            easy_quadruped.adjust_shoulder_angle(0, 0.0)
+            easy_velocity = abs(float(easy_quadruped.shoulder_velocities[0]))
+        finally:
+            quadruped_module.MOTOR_DIFFICULTY = previous_difficulty
+
+        self.assertLess(easy_velocity, base_velocity)
 
 
 if __name__ == "__main__":

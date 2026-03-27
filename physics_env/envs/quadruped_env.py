@@ -72,6 +72,7 @@ class QuadrupedEnv:
         self.circle_radii   = self.CIRCLE_RADII
         self.circles_passed = set()         # stocke les rayons déjà comptés
         self.prev_radius   = None     # distance horizontale au pas t‑1
+        self.prev_potential = None
         self.rot_penalty_coef = 0.5
         self.gait_reward_coef = 0.5
         self.consecutive_steps_below_critical_height = 0
@@ -258,6 +259,10 @@ class QuadrupedEnv:
                 "sparse_reward": 0.0,
                 "tilt_penalty": 0.0,
                 "gait_reward": 0.0,
+                "joint_limit_penalty": 0.0,
+                "pitch_rate_penalty": 0.0,
+                "height_penalty": 0.0,
+                "stability_bonus": 0.0,
                 "terminal_event_reward": 0.0,
                 "forward_tilt_deg": 0.0,
                 "side_tilt_deg": 0.0,
@@ -270,62 +275,35 @@ class QuadrupedEnv:
 
         next_state = self.get_state()
         # ---- REWARD ---
-        # ----------  a) distance à l'origine (suivant Z uniquement) --------------
-        distance_to_origin_z = abs(self.quadruped.position[2])
-        distance_to_origin_x = abs(self.quadruped.position[0])
-        
-        if self.prev_radius is not None and self.prev_radius < distance_to_origin_z :
-            distance_reward = 0.2 + np.sqrt((distance_to_origin_z - self.prev_radius))* 2 - distance_to_origin_x * 0.2
-        else :
-            distance_reward = - 0.2 - distance_to_origin_x * 0.2
-        
-        self.prev_radius = distance_to_origin_z
+        # ----------  a) progrès vers l'avant (potentiel en Z) ----------------------
+        forward_progress = max(0.0, -float(self.quadruped.position[2]))
+        if self.prev_potential is None:
+            distance_reward = 0.0
+        else:
+            distance_reward = PROGRESS_REWARD_COEF * (forward_progress - self.prev_potential)
+        self.prev_potential = forward_progress
+        self.prev_radius = forward_progress
 
-        # ----------  b) Vitesse (suivant Z uniquement) --------------
-        x_speed, y_speed, z_speed = abs(self.quadruped.velocity[0]), abs(self.quadruped.velocity[1]), -self.quadruped.velocity[2] # On choisit de le recompenser dans la direction vers la camera, cela pourrait tout à fait être l'inverse. Pour les autres, peut import le sens, c'est mauvais
-        z_speed_reward = z_speed * 0.5
+        # ----------  b) vitesse avant (faible shaping) ----------------------------
+        forward_speed = -float(self.quadruped.velocity[2])
+        z_speed_reward = FORWARD_SPEED_REWARD_COEF * float(np.clip(forward_speed, -1.0, 1.0))
 
         # ----------  c)  Pénalité d'inclinaison du corps (pénalité brute) --------------
         forward_tilt, side_tilt = self._compute_body_tilt_angles()
         tilt_excess = max(0.0, forward_tilt - TILT_DEADZONE) + max(0.0, side_tilt - TILT_DEADZONE)
         tilt_penalty = -TILT_PENALTY_COEF * tilt_excess
-        
-        # ----------  d)  Récompense principale --------------
+
+        # ----------  d) checkpoints clairsemés le long de l'axe d'avance ----------
         sparse_reward = 0.0
         for r in self.circle_radii:
-            if distance_to_origin_z >= r and r not in self.circles_passed:
+            if forward_progress >= r and r not in self.circles_passed:
                 sparse_reward += 2.0
                 self.circles_passed.add(r)
 
-        # ----------  e)  Mouvement des articulations ----------------
-        immobile_penalty = 0.0
-        for i in range(4):
-            shoulder_activity = abs(self.quadruped.shoulder_velocities[i])
-            elbow_activity = abs(self.quadruped.elbow_velocities[i])
-            if shoulder_activity == 0 :
-                immobile_penalty += 0.25
-            if elbow_activity == 0 :
-                immobile_penalty += 0.25
-
-        # ----------  f)  Pénalité des angles extremes ----------------
-        angle_penalty = 0.0
-        for i in range(4):
-            if abs(self.quadruped.shoulder_angles[i]) > np.pi/2 * 0.9:
-                angle_penalty += 0.25
-            if abs(self.quadruped.elbow_angles[i]) > np.pi/2 * 0.9:
-                angle_penalty += 0.25
-
-        gait_reward = - self.gait_reward_coef * (immobile_penalty + angle_penalty)
-
         # ----------  Termination checker --------------
-
         below_critical_height = self.quadruped.position[1] < 4.5
-        if below_critical_height:
-            sparse_reward = -0.5
-
         above_critical_height = self.quadruped.position[1] > 5.5
-        if above_critical_height:
-            sparse_reward = -0.5
+        height_penalty = HEIGHT_PENALTY if (below_critical_height or above_critical_height) else 0.0
 
         if below_critical_height:
             self.consecutive_steps_below_critical_height += 1
@@ -355,6 +333,21 @@ class QuadrupedEnv:
             self.consecutive_elbow_limit_steps + 1,
             0,
         )
+        joint_limit_progress = self._get_joint_limit_progress()
+        joint_limit_penalty = -JOINT_LIMIT_PROGRESS_PENALTY_COEF * float(np.mean(np.square(joint_limit_progress)))
+        gait_reward = joint_limit_penalty
+
+        pitch_rate = abs(float(self.quadruped.angular_velocity[0]))
+        pitch_rate_penalty = -PITCH_RATE_PENALTY_COEF * min(pitch_rate, MAX_ANGULAR_VELOCITY)
+
+        stable_motion = (
+            max(forward_tilt, side_tilt) < STABILITY_TILT_THRESHOLD
+            and not below_critical_height
+            and not above_critical_height
+            and forward_speed > 0.0
+        )
+        stability_bonus = STABILITY_BONUS if stable_motion else 0.0
+
         joint_limit_timeout = (
             int(self.consecutive_shoulder_limit_steps.max()) > MAX_CONSECUTIVE_JOINT_LIMIT_STEPS
             or int(self.consecutive_elbow_limit_steps.max()) > MAX_CONSECUTIVE_JOINT_LIMIT_STEPS
@@ -394,7 +387,10 @@ class QuadrupedEnv:
                   + z_speed_reward
                   + sparse_reward
                   + tilt_penalty
-                  + gait_reward
+                  + joint_limit_penalty
+                  + pitch_rate_penalty
+                  + height_penalty
+                  + stability_bonus
                   + terminal_event_reward)
         self.last_reward_components = {
             "distance_reward": float(distance_reward),
@@ -402,6 +398,10 @@ class QuadrupedEnv:
             "sparse_reward": float(sparse_reward),
             "tilt_penalty": float(tilt_penalty),
             "gait_reward": float(gait_reward),
+            "joint_limit_penalty": float(joint_limit_penalty),
+            "pitch_rate_penalty": float(pitch_rate_penalty),
+            "height_penalty": float(height_penalty),
+            "stability_bonus": float(stability_bonus),
             "terminal_event_reward": float(terminal_event_reward),
             "forward_tilt_deg": float(np.degrees(forward_tilt)),
             "side_tilt_deg": float(np.degrees(side_tilt)),

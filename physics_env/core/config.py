@@ -54,10 +54,16 @@ MAX_AVERAGE_IMPULSE = 2.0
 # --- Angles d'articulations ---
 SHOULDER_DELTA = 0.025
 ELBOW_DELTA = 0.025
+# 1.0 = comportement moteur actuel (prod), 0.0 = moteur plus assisté:
+# réponse plus directe et freinage/ralentissement plus rapide.
+MOTOR_DIFFICULTY = 1.0
 MOTOR_RESPONSE_GAIN = 0.25
 MOTOR_IDLE_BRAKE_GAIN = 0.35
 MOTOR_VELOCITY_DAMPING = 0.08
 MOTOR_STOP_EPS = 1e-4
+MOTOR_RESPONSE_DIFFICULTY_BOOST = 0.45
+MOTOR_BRAKE_DIFFICULTY_BOOST = 0.45
+MOTOR_DAMPING_DIFFICULTY_BOOST = 0.22
 
 # --- Contact / Friction ----------------------------------------------------
 # 0.02 unites/s ~= 4 mm/s avec l'echelle ci-dessus.
@@ -73,6 +79,13 @@ TERMINAL_PENALTY_TOO_HIGH = -4.0
 TERMINAL_PENALTY_CRITICAL_TILT = -3.0
 TERMINAL_PENALTY_JOINT_LIMIT_TIMEOUT = -2.0
 TERMINAL_BONUS_MAX_STEPS = 0.5
+PROGRESS_REWARD_COEF = 50.0
+FORWARD_SPEED_REWARD_COEF = 0.10
+JOINT_LIMIT_PROGRESS_PENALTY_COEF = 1.5
+PITCH_RATE_PENALTY_COEF = 0.08
+HEIGHT_PENALTY = -0.5
+STABILITY_BONUS = 0.05
+STABILITY_TILT_THRESHOLD = np.deg2rad(6.0)
 
 # ----- Debug Physics Simulation --------------------------------------
 DEBUG_CONTACT = False       
@@ -87,8 +100,8 @@ DEBUG_RL_VIZ   = False
 EPISODES  = 2_000
 MAX_STEPS = 500
 
-START_EPS = 0.49
-EPS_DECAY = 0.998
+START_EPS = 0.99
+EPS_DECAY = 0.999
 EPS_MIN   = 0.01
 
 PLOT_INTERVAL = 30

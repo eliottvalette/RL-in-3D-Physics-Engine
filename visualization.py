@@ -240,15 +240,22 @@ class Visualizer:
 
     def _metric_value_from_episode(self, episode_metrics, metric_name):
         if metric_name == "positive_reward_sum":
-            keys = ("distance_reward", "z_speed_reward", "sparse_reward")
+            keys = ("distance_reward", "z_speed_reward", "sparse_reward", "stability_bonus")
             values = [episode_metrics.get(key) for key in keys]
             if any(value is not None for value in values):
                 return float(sum(value or 0.0 for value in values))
             return None
 
         if metric_name == "penalty_sum":
-            keys = ("tilt_penalty", "gait_reward")
-            values = [episode_metrics.get(key) for key in keys]
+            joint_limit_penalty = episode_metrics.get("joint_limit_penalty")
+            if joint_limit_penalty is None:
+                joint_limit_penalty = episode_metrics.get("gait_reward")
+            values = [
+                episode_metrics.get("tilt_penalty"),
+                joint_limit_penalty,
+                episode_metrics.get("pitch_rate_penalty"),
+                episode_metrics.get("height_penalty"),
+            ]
             if any(value is not None for value in values):
                 return float(sum(value or 0.0 for value in values))
             return None
@@ -258,14 +265,27 @@ class Visualizer:
                 "distance_reward",
                 "z_speed_reward",
                 "sparse_reward",
+                "stability_bonus",
                 "tilt_penalty",
-                "gait_reward",
+                "joint_limit_penalty",
+                "pitch_rate_penalty",
+                "height_penalty",
                 "terminal_event_reward",
             )
             values = [episode_metrics.get(key) for key in keys]
+            if episode_metrics.get("joint_limit_penalty") is None and episode_metrics.get("gait_reward") is not None:
+                values[5] = episode_metrics.get("gait_reward")
             if any(value is not None for value in values):
                 return float(sum(value or 0.0 for value in values))
             return None
+
+        if metric_name == "joint_limit_penalty":
+            value = episode_metrics.get("joint_limit_penalty")
+            if value is None:
+                value = episode_metrics.get("gait_reward")
+            if value is None:
+                return None
+            return float(value)
 
         if metric_name == "td_target_mean":
             values = episode_metrics.get("td_targets")
@@ -413,11 +433,11 @@ class Visualizer:
             ("entropy", "Policy Entropy", "Value", self.palette["green"]),
             ("critic_loss", "Critic Loss", "Loss", self.palette["blue"]),
             ("actor_loss", "Actor Loss", "Loss", self.palette["red"]),
-            ("distance_reward", "Distance Reward", "Reward", self.palette["orange"]),
+            ("distance_reward", "Progress Reward", "Reward", self.palette["orange"]),
             ("z_speed_reward", "Forward Speed Reward", "Reward", self.palette["teal"]),
-            ("sparse_reward", "Sparse Reward", "Reward", self.palette["yellow"]),
+            ("sparse_reward", "Checkpoint Reward", "Reward", self.palette["yellow"]),
             ("tilt_penalty", "Tilt Penalty", "Penalty", self.palette["orange"]),
-            ("gait_reward", "Gait Penalty", "Penalty", self.palette["magenta"]),
+            ("joint_limit_penalty", "Joint Limit Penalty", "Penalty", self.palette["magenta"]),
             ("forward_tilt_deg", "Forward Tilt", "Degrees", self.palette["orange"]),
         ]
 
@@ -449,9 +469,10 @@ class Visualizer:
             [
                 ("reward_norm_mean", "Normalized Reward", self.palette["cyan"]),
                 ("positive_reward_sum", "Positive Reward Sum", self.palette["green"]),
-                ("distance_reward", "Distance", self.palette["orange"]),
+                ("distance_reward", "Progress", self.palette["orange"]),
                 ("z_speed_reward", "Forward Speed", self.palette["teal"]),
-                ("sparse_reward", "Sparse", self.palette["yellow"]),
+                ("sparse_reward", "Checkpoint", self.palette["yellow"]),
+                ("stability_bonus", "Stability Bonus", self.palette["blue"]),
             ],
         )
         self._plot_grouped_series(
@@ -462,7 +483,9 @@ class Visualizer:
             [
                 ("penalty_sum", "Penalty Sum", self.palette["red"]),
                 ("tilt_penalty", "Tilt Penalty", self.palette["orange"]),
-                ("gait_reward", "Gait Penalty", self.palette["magenta"]),
+                ("joint_limit_penalty", "Joint Limit", self.palette["magenta"]),
+                ("pitch_rate_penalty", "Pitch Rate", self.palette["blue"]),
+                ("height_penalty", "Height", self.palette["yellow"]),
             ],
         )
         self._plot_grouped_series(
