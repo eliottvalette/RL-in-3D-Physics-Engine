@@ -8,7 +8,7 @@ class EnvStateFeaturesTest(unittest.TestCase):
     def test_joint_limit_progress_is_appended_to_state(self):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=True)
 
-        env.consecutive_shoulder_limit_steps[:] = [0, 10, MAX_CONSECUTIVE_JOINT_LIMIT_STEPS, 80]
+        env.consecutive_shoulder_limit_steps[:] = [0, 10, MAX_CONSECUTIVE_JOINT_LIMIT_STEPS, MAX_CONSECUTIVE_JOINT_LIMIT_STEPS + 30]
         env.consecutive_elbow_limit_steps[:] = [5, 25, 40, MAX_CONSECUTIVE_JOINT_LIMIT_STEPS]
 
         state = env.get_state()

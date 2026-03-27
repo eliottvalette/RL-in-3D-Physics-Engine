@@ -7,7 +7,7 @@ from visualization import DataCollector
 from agent import QuadrupedAgent
 from physics_env.envs.quadruped_env import QuadrupedEnv
 from typing import List, Tuple
-from physics_env.core.config import EPISODES, EPS_DECAY, START_EPS, EPS_MIN, DEBUG_RL_TRAIN, SAVE_INTERVAL, PLOT_INTERVAL, MAX_STEPS
+from physics_env.core.config import EPISODES, EPS_DECAY, START_EPS, EPS_MIN, DEBUG_RL_TRAIN, SAVE_INTERVAL, PLOT_INTERVAL, MAX_STEPS, TERMINAL_BONUS_MAX_STEPS
 from helpers_rl import save_models
 
 def run_episode(env: QuadrupedEnv, agent: QuadrupedAgent, epsilon: float, rendering: bool, episode: int, render_every: int, data_collector: DataCollector) -> Tuple[List[float], List[dict]]:
@@ -51,6 +51,12 @@ def run_episode(env: QuadrupedEnv, agent: QuadrupedAgent, epsilon: float, render
 
         # Exécuter l'action dans l'environnement
         next_state, reward, done, step_time = env.step(shoulders, elbows)
+        if step == MAX_STEPS - 1 and not done:
+            reward += TERMINAL_BONUS_MAX_STEPS
+            env.last_reward_components["terminal_event_reward"] = float(
+                env.last_reward_components.get("terminal_event_reward", 0.0) + TERMINAL_BONUS_MAX_STEPS
+            )
+            env.last_done_reason = "max_steps"
         data_collector.add_metrics(env.last_reward_components.copy())
 
         # Stocker l'expérience

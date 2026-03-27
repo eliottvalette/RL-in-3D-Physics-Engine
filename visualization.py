@@ -253,6 +253,20 @@ class Visualizer:
                 return float(sum(value or 0.0 for value in values))
             return None
 
+        if metric_name == "net_reward_sum":
+            keys = (
+                "distance_reward",
+                "z_speed_reward",
+                "sparse_reward",
+                "tilt_penalty",
+                "gait_reward",
+                "terminal_event_reward",
+            )
+            values = [episode_metrics.get(key) for key in keys]
+            if any(value is not None for value in values):
+                return float(sum(value or 0.0 for value in values))
+            return None
+
         if metric_name == "td_target_mean":
             values = episode_metrics.get("td_targets")
             if values:
@@ -464,16 +478,11 @@ class Visualizer:
         self._plot_grouped_series(
             axes[3],
             metrics_data,
-            "Done Rates",
-            "Rate",
+            "Net Reward",
+            "Reward",
             [
-                ("done_reason_critical_tilt", "Critical Tilt", self.palette["red"]),
-                ("done_reason_joint_limit_timeout", "Joint Limit", self.palette["magenta"]),
-                ("done_reason_too_high", "Too High", self.palette["yellow"]),
-                ("done_reason_max_steps", "Max Steps", self.palette["green"]),
+                ("net_reward_sum", "Net Reward", self.palette["cyan"]),
             ],
-            y_limits=(-0.02, 1.02),
-            robust_ylim=False,
         )
 
         steps_episodes, steps_values = self._sorted_metric_series(metrics_data, "steps_count")
@@ -494,12 +503,16 @@ class Visualizer:
         self._plot_grouped_series(
             axes[5],
             metrics_data,
-            "Training Context",
-            "Value",
+            "Done Rates",
+            "Rate",
             [
-                ("epsilon", "Exploration", self.palette["magenta"]),
-                ("entropy", "Entropy", self.palette["green"]),
+                ("done_reason_critical_tilt", "Critical Tilt", self.palette["red"]),
+                ("done_reason_joint_limit_timeout", "Joint Limit", self.palette["magenta"]),
+                ("done_reason_too_high", "Too High", self.palette["yellow"]),
+                ("done_reason_max_steps", "Max Steps", self.palette["green"]),
             ],
+            y_limits=(-0.02, 1.02),
+            robust_ylim=False,
         )
 
         fig.suptitle("RL Training Dashboard", fontsize=22, color="#F5F7FA", y=0.992)

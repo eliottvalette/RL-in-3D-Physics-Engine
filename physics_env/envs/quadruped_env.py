@@ -258,6 +258,7 @@ class QuadrupedEnv:
                 "sparse_reward": 0.0,
                 "tilt_penalty": 0.0,
                 "gait_reward": 0.0,
+                "terminal_event_reward": 0.0,
                 "forward_tilt_deg": 0.0,
                 "side_tilt_deg": 0.0,
             }
@@ -360,6 +361,7 @@ class QuadrupedEnv:
         )
 
         done_reason = "running"
+        terminal_event_reward = 0.0
 
         # Le garde-fou "too_high" sert a couper les emballements numeriques.
         # Le signal "too_low" reste utile pour la penalite et l'etat, mais n'est
@@ -369,12 +371,15 @@ class QuadrupedEnv:
         if self.consecutive_steps_above_critical_height > 20:
             done = True
             done_reason = "too_high"
+            terminal_event_reward = TERMINAL_PENALTY_TOO_HIGH
         elif self.consecutive_steps_critical_tilt > MAX_CONSECUTIVE_CRITICAL_TILT_STEPS:
             done = True
             done_reason = "critical_tilt"
+            terminal_event_reward = TERMINAL_PENALTY_CRITICAL_TILT
         elif joint_limit_timeout:
             done = True
             done_reason = "joint_limit_timeout"
+            terminal_event_reward = TERMINAL_PENALTY_JOINT_LIMIT_TIMEOUT
         else:
             done = False 
 
@@ -389,13 +394,15 @@ class QuadrupedEnv:
                   + z_speed_reward
                   + sparse_reward
                   + tilt_penalty
-                  + gait_reward)
+                  + gait_reward
+                  + terminal_event_reward)
         self.last_reward_components = {
             "distance_reward": float(distance_reward),
             "z_speed_reward": float(z_speed_reward),
             "sparse_reward": float(sparse_reward),
             "tilt_penalty": float(tilt_penalty),
             "gait_reward": float(gait_reward),
+            "terminal_event_reward": float(terminal_event_reward),
             "forward_tilt_deg": float(np.degrees(forward_tilt)),
             "side_tilt_deg": float(np.degrees(side_tilt)),
         }
