@@ -348,6 +348,12 @@ class QuadrupedEnv:
         )
         stability_bonus = STABILITY_BONUS if stable_motion else 0.0
 
+        if below_critical_height:
+            distance_reward = min(distance_reward, 0.0)
+            z_speed_reward = min(z_speed_reward, 0.0)
+            sparse_reward = 0.0
+            stability_bonus = 0.0
+
         joint_limit_timeout = (
             int(self.consecutive_shoulder_limit_steps.max()) > MAX_CONSECUTIVE_JOINT_LIMIT_STEPS
             or int(self.consecutive_elbow_limit_steps.max()) > MAX_CONSECUTIVE_JOINT_LIMIT_STEPS

@@ -19,7 +19,7 @@ agent = QuadrupedAgent(
     action_size=ACTION_SIZE,
     gamma=GAMMA,
     learning_rate=ALPHA,
-    load_model=True,
+    load_model=False,
     load_path=f"saved_models/quadruped_agent.pth",
 )
 
@@ -29,7 +29,7 @@ if PROFILING:
     profiler.enable()
 
 # Démarrer l'entraînement
-main_training_loop(agent, episodes=EPISODES, rendering=RENDERING, render_every=100)
+main_training_loop(agent, episodes=EPISODES, rendering=RENDERING, render_every=25)
 
 if PROFILING:
     profiler.disable()
