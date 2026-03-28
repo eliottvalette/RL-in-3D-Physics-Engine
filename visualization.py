@@ -95,7 +95,7 @@ class DataCollector:
         for m in self.current_episode_metrics:
             all_keys.update(m.keys())
         mean_metrics = {}
-        LIST_KEYS = ["td_targets", "state_values", "action_idx"]
+        LIST_KEYS = ["returns", "advantages", "state_values"]
         for key in all_keys:
             values = [m[key] for m in self.current_episode_metrics if key in m and m[key] is not None]
             if key in LIST_KEYS:
@@ -240,7 +240,7 @@ class Visualizer:
 
     def _metric_value_from_episode(self, episode_metrics, metric_name):
         if metric_name == "positive_reward_sum":
-            keys = ("distance_reward", "z_speed_reward", "sparse_reward", "stability_bonus")
+            keys = ("distance_reward", "z_speed_reward", "sparse_reward")
             values = [episode_metrics.get(key) for key in keys]
             if any(value is not None for value in values):
                 return float(sum(value or 0.0 for value in values))
@@ -253,7 +253,8 @@ class Visualizer:
             values = [
                 episode_metrics.get("tilt_penalty"),
                 joint_limit_penalty,
-                episode_metrics.get("pitch_rate_penalty"),
+                episode_metrics.get("angular_velocity_penalty", episode_metrics.get("pitch_rate_penalty")),
+                episode_metrics.get("action_smoothness_penalty"),
                 episode_metrics.get("height_penalty"),
             ]
             if any(value is not None for value in values):
@@ -265,16 +266,16 @@ class Visualizer:
                 "distance_reward",
                 "z_speed_reward",
                 "sparse_reward",
-                "stability_bonus",
                 "tilt_penalty",
                 "joint_limit_penalty",
-                "pitch_rate_penalty",
+                "angular_velocity_penalty",
+                "action_smoothness_penalty",
                 "height_penalty",
                 "terminal_event_reward",
             )
             values = [episode_metrics.get(key) for key in keys]
             if episode_metrics.get("joint_limit_penalty") is None and episode_metrics.get("gait_reward") is not None:
-                values[5] = episode_metrics.get("gait_reward")
+                values[4] = episode_metrics.get("gait_reward")
             if any(value is not None for value in values):
                 return float(sum(value or 0.0 for value in values))
             return None
@@ -287,14 +288,20 @@ class Visualizer:
                 return None
             return float(value)
 
-        if metric_name == "td_target_mean":
-            values = episode_metrics.get("td_targets")
+        if metric_name == "returns_mean":
+            values = episode_metrics.get("returns")
             if values:
                 return float(np.mean(values))
             return None
 
         if metric_name == "state_value_mean":
             values = episode_metrics.get("state_values")
+            if values:
+                return float(np.mean(values))
+            return None
+
+        if metric_name == "advantage_mean":
+            values = episode_metrics.get("advantages")
             if values:
                 return float(np.mean(values))
             return None
@@ -427,18 +434,20 @@ class Visualizer:
         axes = axes.flatten()
 
         mono_specs = [
-            ("reward_norm_mean", "Normalized Reward", "Reward", self.palette["cyan"]),
+            ("reward_norm_mean", "Rollout Reward Mean", "Reward", self.palette["cyan"]),
             ("steps_count", "Steps / Episode", "Steps", self.palette["blue"]),
-            ("epsilon", "Exploration", "Value", self.palette["magenta"]),
             ("entropy", "Policy Entropy", "Value", self.palette["green"]),
+            ("rollout_len", "Rollout Length", "Steps", self.palette["magenta"]),
             ("critic_loss", "Critic Loss", "Loss", self.palette["blue"]),
             ("actor_loss", "Actor Loss", "Loss", self.palette["red"]),
+            ("episode_reward", "Episode Reward", "Reward", self.palette["cyan"]),
+            ("forward_progress", "Forward Progress", "Distance", self.palette["orange"]),
             ("distance_reward", "Progress Reward", "Reward", self.palette["orange"]),
             ("z_speed_reward", "Forward Speed Reward", "Reward", self.palette["teal"]),
             ("sparse_reward", "Checkpoint Reward", "Reward", self.palette["yellow"]),
-            ("tilt_penalty", "Tilt Penalty", "Penalty", self.palette["orange"]),
+            ("locomotion_reward_scale", "Locomotion Scale", "Scale", self.palette["green"]),
             ("joint_limit_penalty", "Joint Limit Penalty", "Penalty", self.palette["magenta"]),
-            ("forward_tilt_deg", "Forward Tilt", "Degrees", self.palette["orange"]),
+            ("returns_mean", "Returns Mean", "Value", self.palette["yellow"]),
         ]
 
         for ax, (metric_name, title, ylabel, color) in zip(axes, mono_specs):
@@ -472,11 +481,23 @@ class Visualizer:
                 ("distance_reward", "Progress", self.palette["orange"]),
                 ("z_speed_reward", "Forward Speed", self.palette["teal"]),
                 ("sparse_reward", "Checkpoint", self.palette["yellow"]),
-                ("stability_bonus", "Stability Bonus", self.palette["blue"]),
+                ("episode_reward", "Episode Reward", self.palette["blue"]),
             ],
         )
         self._plot_grouped_series(
             axes[1],
+            metrics_data,
+            "Pose Gates",
+            "Scale",
+            [
+                ("tilt_reward_scale", "Tilt Scale", self.palette["orange"]),
+                ("height_reward_scale", "Height Scale", self.palette["yellow"]),
+                ("locomotion_reward_scale", "Pose Scale", self.palette["green"]),
+                ("mean_locomotion_reward_scale", "Episode Mean Pose Scale", self.palette["blue"]),
+            ],
+        )
+        self._plot_grouped_series(
+            axes[2],
             metrics_data,
             "Penalty Overview",
             "Penalty",
@@ -484,27 +505,20 @@ class Visualizer:
                 ("penalty_sum", "Penalty Sum", self.palette["red"]),
                 ("tilt_penalty", "Tilt Penalty", self.palette["orange"]),
                 ("joint_limit_penalty", "Joint Limit", self.palette["magenta"]),
-                ("pitch_rate_penalty", "Pitch Rate", self.palette["blue"]),
-                ("height_penalty", "Height", self.palette["yellow"]),
-            ],
-        )
-        self._plot_grouped_series(
-            axes[2],
-            metrics_data,
-            "Tilt Angles",
-            "Degrees",
-            [
-                ("forward_tilt_deg", "Forward Tilt", self.palette["orange"]),
-                ("side_tilt_deg", "Side Tilt", self.palette["blue"]),
+                ("angular_velocity_penalty", "Angular Velocity", self.palette["blue"]),
+                ("action_smoothness_penalty", "Action Smoothness", self.palette["teal"]),
             ],
         )
         self._plot_grouped_series(
             axes[3],
             metrics_data,
-            "Net Reward",
-            "Reward",
+            "Evaluation",
+            "Value",
             [
-                ("net_reward_sum", "Net Reward", self.palette["cyan"]),
+                ("eval_episode_reward", "Eval Reward", self.palette["cyan"]),
+                ("eval_forward_progress", "Eval Progress", self.palette["orange"]),
+                ("eval_mean_locomotion_scale", "Eval Pose Scale", self.palette["green"]),
+                ("eval_clean_episode", "Eval Clean", self.palette["yellow"]),
             ],
         )
 
@@ -532,7 +546,7 @@ class Visualizer:
                 ("done_reason_critical_tilt", "Critical Tilt", self.palette["red"]),
                 ("done_reason_joint_limit_timeout", "Joint Limit", self.palette["magenta"]),
                 ("done_reason_too_high", "Too High", self.palette["yellow"]),
-                ("done_reason_max_steps", "Max Steps", self.palette["green"]),
+                ("done_reason_max_steps", "Clean Episode", self.palette["green"]),
             ],
             y_limits=(-0.02, 1.02),
             robust_ylim=False,
@@ -584,18 +598,22 @@ class Visualizer:
         """
         Histogrammes dark des TD targets et state values avec stats de résumé.
         """
-        all_td_targets = []
+        all_returns = []
         all_state_values = []
         for episode_metrics in metrics_data.values():
-            if 'td_targets' in episode_metrics and episode_metrics['td_targets'] is not None:
-                all_td_targets.extend(episode_metrics['td_targets'])
+            if 'returns' in episode_metrics and episode_metrics['returns'] is not None:
+                all_returns.extend(episode_metrics['returns'])
             if 'state_values' in episode_metrics and episode_metrics['state_values'] is not None:
                 all_state_values.extend(episode_metrics['state_values'])
 
+        if not all_returns or not all_state_values:
+            print("[VIZ] Not enough value data found, skipping value distribution plots.")
+            return
+
         fig, axes = plt.subplots(2, 1, figsize=(16, 9), sharex=True)
-        xlim = self._combined_robust_xlim(all_td_targets, all_state_values)
+        xlim = self._combined_robust_xlim(all_returns, all_state_values)
         plots = [
-            (axes[0], np.asarray(all_td_targets, dtype=np.float64), "TD Targets", self.palette["orange"]),
+            (axes[0], np.asarray(all_returns, dtype=np.float64), "Returns", self.palette["orange"]),
             (axes[1], np.asarray(all_state_values, dtype=np.float64), "Critic State Values", self.palette["blue"]),
         ]
 

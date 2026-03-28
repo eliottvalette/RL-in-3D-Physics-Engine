@@ -1,157 +1,202 @@
 # train.py
 import os
-import numpy as np
 import time
 import traceback
-from visualization import DataCollector
+
+import numpy as np
+
 from agent import QuadrupedAgent
-from physics_env.envs.quadruped_env import QuadrupedEnv
-from typing import List, Tuple
-from physics_env.core.config import EPISODES, EPS_DECAY, START_EPS, EPS_MIN, DEBUG_RL_TRAIN, SAVE_INTERVAL, PLOT_INTERVAL, MAX_STEPS, TERMINAL_BONUS_MAX_STEPS
 from helpers_rl import save_models
+from physics_env.core.config import (
+    DEBUG_RL_TRAIN,
+    EPISODES,
+    EVAL_EPISODES,
+    EVAL_INTERVAL,
+    MAX_STEPS,
+    PLOT_INTERVAL,
+    ROLLOUT_STEPS,
+    SAVE_INTERVAL,
+)
+from physics_env.envs.quadruped_env import QuadrupedEnv
+from visualization import DataCollector
 
-def run_episode(env: QuadrupedEnv, agent: QuadrupedAgent, epsilon: float, rendering: bool, episode: int, render_every: int, data_collector: DataCollector) -> Tuple[List[float], List[dict]]:
-    """
-    Exécute un épisode complet du jeu de quadruped.
-    
-    Args:
-        env (QuadrupedEnv): L'environnement de jeu
-        epsilon (float): Paramètre d'exploration
-        rendering (bool): Active/désactive le rendu graphique
-        episode (int): Numéro de l'épisode en cours
-        render_every (int): Fréquence de mise à jour du rendu
-        data_collector (DataCollector): Collecteur de données pour la visualisation
 
-    Returns:
-        Tuple[List[float], List[dict]]: Récompenses finales et métriques d'entraînement
-    """
+EVENT_KEYS = ("too_high", "critical_tilt", "joint_limit_timeout")
 
-    env.quadruped.reset()
-    env.circles_passed.clear()
-    env.prev_potential = None  # Réinitialiser le potentiel pour le nouvel épisode
-    env.consecutive_steps_below_critical_height = 0
-    env.prev_radius = None
 
-    if DEBUG_RL_TRAIN:
-        print(f"[TRAIN] Début de la main")
+def _new_event_flags():
+    return {key: False for key in EVENT_KEYS}
 
-    #### Boucle principale du jeu ####
+
+def _update_event_flags(event_flags, done_reason):
+    if done_reason in event_flags:
+        event_flags[done_reason] = True
+
+
+def _event_metrics(event_flags):
+    clean_episode = not any(event_flags.values())
+    return {
+        "done_reason_too_high": 1.0 if event_flags["too_high"] else 0.0,
+        "done_reason_critical_tilt": 1.0 if event_flags["critical_tilt"] else 0.0,
+        "done_reason_joint_limit_timeout": 1.0 if event_flags["joint_limit_timeout"] else 0.0,
+        "done_reason_max_steps": 1.0 if clean_episode else 0.0,
+    }
+
+
+def _aggregate_metric_dicts(metric_dicts):
+    if not metric_dicts:
+        return {}
+
+    aggregated = {}
+    all_keys = set()
+    for metric_dict in metric_dicts:
+        all_keys.update(metric_dict.keys())
+
+    for key in all_keys:
+        values = [metric_dict[key] for metric_dict in metric_dicts if metric_dict.get(key) is not None]
+        if not values:
+            continue
+        aggregated[key] = float(np.mean(values))
+    return aggregated
+
+
+def run_episode(env: QuadrupedEnv, agent: QuadrupedAgent, rendering: bool, episode: int, render_every: int, data_collector: DataCollector):
+    env.reset_episode()
+    event_flags = _new_event_flags()
+    episode_reward = 0.0
+    locomotion_scales = []
     steps_count = 0
+
     for step in range(MAX_STEPS):
-        # Récupération de l'état actuel
         state = env.get_state()
+        shoulders, elbows, action_info = agent.get_action(state, deterministic=False)
+        next_state, reward, terminated, step_time = env.step(shoulders, elbows)
+        truncated = step == MAX_STEPS - 1
 
-        # Prédiction avec une inférence classique du modèle
-        shoulders, elbows, action_vec = agent.get_action(state, epsilon)
-        
-        if DEBUG_RL_TRAIN:
-            print(f"[TRAIN] state : {state}")
-            print(f"[TRAIN] shoulder_actions : {shoulders}")
-            print(f"[TRAIN] elbow_actions : {elbows}")
-
-        # Exécuter l'action dans l'environnement
-        next_state, reward, done, step_time = env.step(shoulders, elbows)
-        if step == MAX_STEPS - 1 and env.last_done_reason == "running":
-            reward += TERMINAL_BONUS_MAX_STEPS
-            env.last_reward_components["terminal_event_reward"] = float(
-                env.last_reward_components.get("terminal_event_reward", 0.0) + TERMINAL_BONUS_MAX_STEPS
-            )
-            env.last_done_reason = "max_steps"
+        agent.store_transition(
+            state=state,
+            action_info=action_info,
+            reward=reward,
+            terminated=terminated,
+            truncated=truncated,
+        )
+        data_collector.add_state(state)
         data_collector.add_metrics(env.last_reward_components.copy())
 
-        # Stocker l'expérience
-        agent.remember(state, action_vec, reward, done, next_state)
-
-        data_collector.add_state(state)
+        episode_reward += reward
         steps_count += 1
-    
-        # Rendu graphique si activé
-        if rendering and (episode % render_every == 0):
-            env.render(reward, done, step_time)
+        locomotion_scale = env.last_reward_components.get("locomotion_reward_scale")
+        if locomotion_scale is not None:
+            locomotion_scales.append(float(locomotion_scale))
+        _update_event_flags(event_flags, env.last_done_reason)
 
-        # Training mid-episode car ils sont très longs
-        if step % 5 == 0:
-            metrics = agent.train_model(epsilon)
-            data_collector.add_metrics(metrics)
-        
-        if done:
+        if rendering and (episode % render_every == 0):
+            env.render(reward, terminated, step_time)
+
+        if len(agent.rollout_buffer) >= ROLLOUT_STEPS or terminated or truncated:
+            bootstrap_value = 0.0 if terminated else agent.evaluate_state(next_state)
+            update_metrics = agent.update_from_rollout(last_value=bootstrap_value)
+            if update_metrics is not None:
+                data_collector.add_metrics(update_metrics)
+
+        if terminated or truncated:
             break
 
-    print(f"\n[TRAIN] === Résultats de l'épisode [{episode + 1}/{EPISODES}] ===")
-    print(f"[TRAIN] Nombre de steps: {steps_count}")
+    summary = {
+        "steps_count": float(steps_count),
+        "episode_reward": float(episode_reward),
+        "forward_progress": float(max(0.0, -float(env.quadruped.position[2]))),
+        "mean_locomotion_reward_scale": float(np.mean(locomotion_scales)) if locomotion_scales else None,
+    }
+    summary.update(_event_metrics(event_flags))
 
-    metrics = agent.train_model(epsilon)
-    final_done_reason = env.last_done_reason if env.last_done_reason != "running" else "max_steps"
-    # Ajouter le nombre de steps aux métriques
-    metrics['steps_count'] = steps_count
-    metrics['done_reason_too_high'] = 1.0 if final_done_reason == "too_high" else 0.0
-    metrics['done_reason_critical_tilt'] = 1.0 if final_done_reason == "critical_tilt" else 0.0
-    metrics['done_reason_joint_limit_timeout'] = 1.0 if final_done_reason == "joint_limit_timeout" else 0.0
-    metrics['done_reason_max_steps'] = 1.0 if final_done_reason == "max_steps" else 0.0
-    data_collector.add_metrics(metrics)
-    data_collector.save_episode(episode)
+    if DEBUG_RL_TRAIN:
+        print(f"[TRAIN] episode_reward={episode_reward:.3f} progress={summary['forward_progress']:.3f}")
+
+    return summary
+
+
+def run_evaluation_episode(agent: QuadrupedAgent, env: QuadrupedEnv):
+    env.reset_episode()
+    event_flags = _new_event_flags()
+    episode_reward = 0.0
+    locomotion_scales = []
+
+    for _ in range(MAX_STEPS):
+        state = env.get_state()
+        shoulders, elbows, _ = agent.get_action(state, deterministic=True)
+        _, reward, _, _ = env.step(shoulders, elbows)
+        episode_reward += reward
+        locomotion_scale = env.last_reward_components.get("locomotion_reward_scale")
+        if locomotion_scale is not None:
+            locomotion_scales.append(float(locomotion_scale))
+        _update_event_flags(event_flags, env.last_done_reason)
+
+    eval_metrics = {
+        "eval_episode_reward": float(episode_reward),
+        "eval_forward_progress": float(max(0.0, -float(env.quadruped.position[2]))),
+        "eval_mean_locomotion_scale": float(np.mean(locomotion_scales)) if locomotion_scales else None,
+        "eval_clean_episode": 1.0 if not any(event_flags.values()) else 0.0,
+        "eval_too_high": 1.0 if event_flags["too_high"] else 0.0,
+        "eval_critical_tilt": 1.0 if event_flags["critical_tilt"] else 0.0,
+        "eval_joint_limit_timeout": 1.0 if event_flags["joint_limit_timeout"] else 0.0,
+    }
+    return eval_metrics
+
 
 def main_training_loop(agent: QuadrupedAgent, episodes: int, rendering: bool, render_every: int):
-    """
-    Boucle principale d'entraînement des agents.
-    
-    Args:
-        agent (QuadrupedAgent): Agent à entraîner
-        episodes (int): Nombre total d'épisodes d'entraînement
-        rendering (bool): Active/désactive le rendu graphique
-        render_every (int): Fréquence de mise à jour du rendu graphique
-    """
-    # Initialisation des historiques et de l'environnement
     env = QuadrupedEnv(rendering=rendering)
-    env.clock.tick(240)
-    
-    # Configuration du collecteur de données
+    eval_env = QuadrupedEnv(rendering=False, headless=True)
+
     data_collector = DataCollector(
         save_interval=SAVE_INTERVAL,
         plot_interval=PLOT_INTERVAL,
-        start_epsilon=START_EPS,
-        epsilon_decay=EPS_DECAY,
-        epsilon_min=EPS_MIN
+        start_epsilon=0.0,
+        epsilon_decay=1.0,
+        epsilon_min=0.0,
     )
-    
+
+    episode = 0
     try:
         for episode in range(episodes):
             start_time = time.time()
 
-            # Décroissance d'epsilon
-            epsilon = np.clip(START_EPS * EPS_DECAY ** episode, EPS_MIN, START_EPS)
-            epsilon = np.clip(START_EPS * EPS_DECAY ** episode, EPS_MIN, START_EPS)
-            
-            # Exécuter l'épisode et obtenir les résultats incluant les métriques
-            run_episode(env, agent, epsilon, rendering, episode, render_every, data_collector)
-            
-            # Afficher les informations de l'épisode
-            print(f"\n[TRAIN] Episode [{episode + 1}/{episodes}]")
-            print(f"[TRAIN] Randomness: {epsilon*100:.3f}%")
-            print(f"[TRAIN] Time taken: {time.time() - start_time:.2f} seconds")
-            
-        # Save models at end of training
-        if episode == episodes - 1 :
-            save_models(agent, episode)
-            print("[TRAIN] Generating visualization...")
-            data_collector.force_visualization()
+            episode_summary = run_episode(env, agent, rendering, episode, render_every, data_collector)
 
-    except Exception as e:
-        print(f"[TRAIN] An error occurred: {e}")
+            if EVAL_INTERVAL > 0 and (episode + 1) % EVAL_INTERVAL == 0:
+                eval_summaries = [run_evaluation_episode(agent, eval_env) for _ in range(EVAL_EPISODES)]
+                episode_summary.update(_aggregate_metric_dicts(eval_summaries))
+
+            data_collector.add_metrics(episode_summary)
+            data_collector.save_episode(episode)
+
+            print(f"\n[TRAIN] Episode [{episode + 1}/{episodes}]")
+            print(f"[TRAIN] Steps: {int(episode_summary['steps_count'])}")
+            print(f"[TRAIN] Reward: {episode_summary['episode_reward']:.3f}")
+            print(f"[TRAIN] Progress: {episode_summary['forward_progress']:.3f}")
+            if "eval_episode_reward" in episode_summary:
+                print(
+                    "[TRAIN] Eval:",
+                    f"reward={episode_summary['eval_episode_reward']:.3f}",
+                    f"progress={episode_summary['eval_forward_progress']:.3f}",
+                    f"clean={episode_summary['eval_clean_episode']:.2f}",
+                )
+            print(f"[TRAIN] Time taken: {time.time() - start_time:.2f} seconds")
+
+        save_models(agent, episode)
+        print("[TRAIN] Generating visualization...")
+        data_collector.force_visualization()
+
+    except Exception as exc:
+        print(f"[TRAIN] An error occurred: {exc}")
         traceback.print_exc()
         save_models(agent, episode)
         print("[TRAIN] Generating visualization...")
         data_collector.force_visualization()
+        raise
 
-        # delete temp_viz_json files
-        for file in os.listdir("temp_viz_json"):
-            os.remove(os.path.join("temp_viz_json", file))
-        
     finally:
-        save_models(agent, episode)
-        print("[TRAIN] Generating visualization...")
-        data_collector.force_visualization()
-
-        # delete temp_viz_json files
-        for file in os.listdir("temp_viz_json"):
-            os.remove(os.path.join("temp_viz_json", file))
+        temp_dir = "temp_viz_json"
+        if os.path.exists(temp_dir):
+            for file_name in os.listdir(temp_dir):
+                os.remove(os.path.join(temp_dir, file_name))

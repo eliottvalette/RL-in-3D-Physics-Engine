@@ -28,10 +28,11 @@ def save_models(agent, episode, models_dir="saved_models"):
         'critic_optimizer_state_dict': agent.critic_optimizer.state_dict()
     }
     
-    torch.save(
-        checkpoint,
-        f"{models_dir}/quadruped_agent_epoch_{episode}.pth"
-    )
+    epoch_path = f"{models_dir}/quadruped_agent_epoch_{episode}.pth"
+    latest_path = f"{models_dir}/quadruped_agent.pth"
+
+    torch.save(checkpoint, epoch_path)
+    torch.save(checkpoint, latest_path)
     print("Models saved successfully!")
 
 def save_metrics(metrics_history, output_dir):

@@ -24,7 +24,8 @@ class TerminalRewardsTest(unittest.TestCase):
         env.quadruped.position[1] = 6.2
         env.consecutive_steps_above_critical_height = 21
 
-        _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
+        with patch("physics_env.envs.quadruped_env.update_quadruped", lambda quadruped: None):
+            _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
 
         self.assertFalse(done)
         self.assertEqual(env.last_done_reason, "too_high")
@@ -37,7 +38,8 @@ class TerminalRewardsTest(unittest.TestCase):
         env.quadruped.sync_euler_from_orientation()
         env.consecutive_steps_critical_tilt = MAX_CONSECUTIVE_CRITICAL_TILT_STEPS
 
-        _, _, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
+        with patch("physics_env.envs.quadruped_env.update_quadruped", lambda quadruped: None):
+            _, _, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
 
         self.assertFalse(done)
         self.assertEqual(env.last_done_reason, "critical_tilt")
@@ -48,7 +50,8 @@ class TerminalRewardsTest(unittest.TestCase):
         env.quadruped.shoulder_angles[0] = JOINT_LIMIT_THRESHOLD + 0.05
         env.consecutive_shoulder_limit_steps[0] = MAX_CONSECUTIVE_JOINT_LIMIT_STEPS
 
-        _, _, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
+        with patch("physics_env.envs.quadruped_env.update_quadruped", lambda quadruped: None):
+            _, _, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
 
         self.assertFalse(done)
         self.assertEqual(env.last_done_reason, "joint_limit_timeout")
@@ -82,9 +85,9 @@ class TerminalRewardsTest(unittest.TestCase):
         self.assertGreater(high_tilt_components["distance_reward"], 0.0)
         self.assertGreater(upright_components["z_speed_reward"], high_tilt_components["z_speed_reward"])
         self.assertGreater(high_tilt_components["z_speed_reward"], 0.0)
-        self.assertGreater(upright_components["stability_bonus"], high_tilt_components["stability_bonus"])
         self.assertGreater(high_tilt_components["tilt_reward_scale"], 0.0)
         self.assertLess(high_tilt_components["tilt_reward_scale"], 1.0)
+        self.assertGreater(upright_components["locomotion_reward_scale"], high_tilt_components["locomotion_reward_scale"])
         self.assertLess(high_tilt_reward, upright_reward)
 
     def test_positive_rewards_are_scaled_down_smoothly_when_height_drifts(self):
@@ -115,7 +118,7 @@ class TerminalRewardsTest(unittest.TestCase):
         self.assertGreater(high_components["distance_reward"], 0.0)
         self.assertGreater(upright_components["z_speed_reward"], high_components["z_speed_reward"])
         self.assertGreater(high_components["z_speed_reward"], 0.0)
-        self.assertGreater(upright_components["stability_bonus"], high_components["stability_bonus"])
+        self.assertGreater(upright_components["locomotion_reward_scale"], high_components["locomotion_reward_scale"])
         self.assertLess(high_reward, upright_reward)
 
     def test_backward_motion_does_not_earn_forward_progress_or_checkpoints(self):
@@ -130,7 +133,18 @@ class TerminalRewardsTest(unittest.TestCase):
         self.assertFalse(done)
         self.assertEqual(env.last_reward_components["distance_reward"], 0.0)
         self.assertEqual(env.last_reward_components["sparse_reward"], 0.0)
-        self.assertLess(env.last_reward_components["z_speed_reward"], 0.0)
+        self.assertEqual(env.last_reward_components["z_speed_reward"], 0.0)
+        self.assertLessEqual(reward, 0.0)
+
+    def test_action_smoothness_penalizes_large_action_jumps(self):
+        env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
+        env.prev_action[:] = -1.0
+
+        with patch("physics_env.envs.quadruped_env.update_quadruped", lambda quadruped: None):
+            _, reward, done, _ = env.step([1, 1, 1, 1], [1, 1, 1, 1])
+
+        self.assertFalse(done)
+        self.assertLess(env.last_reward_components["action_smoothness_penalty"], 0.0)
         self.assertLess(reward, 0.0)
 
 
