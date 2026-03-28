@@ -96,6 +96,32 @@ class QuadrupedEnv:
         side_tilt = abs(np.arctan2(body_up_world[2], body_up_world[1]))
         return forward_tilt, side_tilt
 
+    def _compute_tilt_reward_scale(self, max_tilt):
+        if max_tilt <= STABILITY_TILT_THRESHOLD:
+            return 1.0
+        if max_tilt >= CRITICAL_TILT_ANGLE:
+            return 0.0
+
+        tilt_window = CRITICAL_TILT_ANGLE - STABILITY_TILT_THRESHOLD
+        if tilt_window <= 0.0:
+            return 0.0
+
+        return float(np.clip((CRITICAL_TILT_ANGLE - max_tilt) / tilt_window, 0.0, 1.0))
+
+    def _compute_height_reward_scale(self, body_height):
+        if MIN_BODY_HEIGHT <= body_height <= MAX_BODY_HEIGHT:
+            return 1.0
+
+        if body_height < MIN_BODY_HEIGHT:
+            overshoot = MIN_BODY_HEIGHT - body_height
+        else:
+            overshoot = body_height - MAX_BODY_HEIGHT
+
+        if HEIGHT_REWARD_DECAY_MARGIN <= 0.0:
+            return 0.0
+
+        return float(np.clip(1.0 - overshoot / HEIGHT_REWARD_DECAY_MARGIN, 0.0, 1.0))
+
     def _get_joint_limit_progress(self):
         shoulder_progress = np.clip(
             self.consecutive_shoulder_limit_steps.astype(np.float32) / MAX_CONSECUTIVE_JOINT_LIMIT_STEPS,
@@ -275,7 +301,9 @@ class QuadrupedEnv:
 
         next_state = self.get_state()
         # ---- REWARD ---
-        # ----------  a) progrès vers l'avant (potentiel en Z) ----------------------
+        # ----------  a) progrès vers l'avant (potentiel signe sur -Z) --------------
+        # L'avant du quadruped est defini par une progression vers les z negatifs.
+        # Utiliser abs(z) rewardait aussi les derivees vers l'arriere.
         forward_progress = max(0.0, -float(self.quadruped.position[2]))
         if self.prev_potential is None:
             distance_reward = 0.0
@@ -290,6 +318,7 @@ class QuadrupedEnv:
 
         # ----------  c)  Pénalité d'inclinaison du corps (pénalité brute) --------------
         forward_tilt, side_tilt = self._compute_body_tilt_angles()
+        max_tilt = max(forward_tilt, side_tilt)
         tilt_excess = max(0.0, forward_tilt - TILT_DEADZONE) + max(0.0, side_tilt - TILT_DEADZONE)
         tilt_penalty = -TILT_PENALTY_COEF * tilt_excess
 
@@ -297,12 +326,13 @@ class QuadrupedEnv:
         sparse_reward = 0.0
         for r in self.circle_radii:
             if forward_progress >= r and r not in self.circles_passed:
-                sparse_reward += 2.0
+                sparse_reward += 5.0
                 self.circles_passed.add(r)
 
         # ----------  Termination checker --------------
-        below_critical_height = self.quadruped.position[1] < 4.5
-        above_critical_height = self.quadruped.position[1] > 5.5
+        body_height = float(self.quadruped.position[1])
+        below_critical_height = body_height < MIN_BODY_HEIGHT
+        above_critical_height = body_height > MAX_BODY_HEIGHT
         height_penalty = HEIGHT_PENALTY if (below_critical_height or above_critical_height) else 0.0
 
         if below_critical_height:
@@ -315,7 +345,7 @@ class QuadrupedEnv:
             self.consecutive_steps_below_critical_height = 0
             self.consecutive_steps_above_critical_height = 0
 
-        critically_tilted = max(forward_tilt, side_tilt) > CRITICAL_TILT_ANGLE
+        critically_tilted = max_tilt > CRITICAL_TILT_ANGLE
         if critically_tilted:
             self.consecutive_steps_critical_tilt += 1
         else:
@@ -340,19 +370,18 @@ class QuadrupedEnv:
         pitch_rate = abs(float(self.quadruped.angular_velocity[0]))
         pitch_rate_penalty = -PITCH_RATE_PENALTY_COEF * min(pitch_rate, MAX_ANGULAR_VELOCITY)
 
-        stable_motion = (
-            max(forward_tilt, side_tilt) < STABILITY_TILT_THRESHOLD
-            and not below_critical_height
-            and not above_critical_height
-            and forward_speed > 0.0
-        )
-        stability_bonus = STABILITY_BONUS if stable_motion else 0.0
+        tilt_reward_scale = self._compute_tilt_reward_scale(max_tilt)
+        height_reward_scale = self._compute_height_reward_scale(body_height)
+        locomotion_reward_scale = tilt_reward_scale * height_reward_scale
 
-        if below_critical_height:
-            distance_reward = min(distance_reward, 0.0)
-            z_speed_reward = min(z_speed_reward, 0.0)
-            sparse_reward = 0.0
-            stability_bonus = 0.0
+        # On attenue progressivement les rewards locomotion quand le corps se couche
+        # ou s'eloigne de sa fenetre de hauteur utile, au lieu de coupures brutales.
+        distance_reward *= locomotion_reward_scale
+        z_speed_reward *= locomotion_reward_scale
+        sparse_reward *= locomotion_reward_scale
+
+        stable_motion = forward_speed > 0.0
+        stability_bonus = STABILITY_BONUS * locomotion_reward_scale if stable_motion else 0.0
 
         joint_limit_timeout = (
             int(self.consecutive_shoulder_limit_steps.max()) > MAX_CONSECUTIVE_JOINT_LIMIT_STEPS
@@ -362,25 +391,19 @@ class QuadrupedEnv:
         done_reason = "running"
         terminal_event_reward = 0.0
 
-        # Le garde-fou "too_high" sert a couper les emballements numeriques.
-        # Le signal "too_low" reste utile pour la penalite et l'etat, mais n'est
-        # plus considere comme une mort automatique.
-        # Un tilt critique soutenu ou une articulation coincee en butee restent
-        # en revanche de vrais echecs de locomotion.
+        # Les etats graves restent penalises, mais ne terminent plus l'episode.
+        # L'objectif est d'eviter que l'agent apprenne a provoquer une terminaison
+        # anticipee plutot qu'a se corriger et continuer a marcher.
         if self.consecutive_steps_above_critical_height > 20:
-            done = True
             done_reason = "too_high"
             terminal_event_reward = TERMINAL_PENALTY_TOO_HIGH
         elif self.consecutive_steps_critical_tilt > MAX_CONSECUTIVE_CRITICAL_TILT_STEPS:
-            done = True
             done_reason = "critical_tilt"
             terminal_event_reward = TERMINAL_PENALTY_CRITICAL_TILT
         elif joint_limit_timeout:
-            done = True
             done_reason = "joint_limit_timeout"
             terminal_event_reward = TERMINAL_PENALTY_JOINT_LIMIT_TIMEOUT
-        else:
-            done = False 
+        done = False
 
         # Inform the quadruped that it is in danger
         self.quadruped.too_high = above_critical_height
@@ -409,6 +432,9 @@ class QuadrupedEnv:
             "height_penalty": float(height_penalty),
             "stability_bonus": float(stability_bonus),
             "terminal_event_reward": float(terminal_event_reward),
+            "tilt_reward_scale": float(tilt_reward_scale),
+            "height_reward_scale": float(height_reward_scale),
+            "locomotion_reward_scale": float(locomotion_reward_scale),
             "forward_tilt_deg": float(np.degrees(forward_tilt)),
             "side_tilt_deg": float(np.degrees(side_tilt)),
         }

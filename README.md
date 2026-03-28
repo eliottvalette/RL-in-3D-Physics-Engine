@@ -35,6 +35,7 @@ r_t = 0.2\,[d_t>d_{t-1}] \;+\; 20\,(d_t - d_{t-1}) \;-\; 0.5\,\mathbb{1}_{\text{
 ```
 
 plus sparse bonuses of $+2$ when crossing radii $\{0.5,0.75,1,\dotsc,10\}$.  
+Positive locomotion rewards are clipped to zero whenever the maximum body tilt exceeds $10^\circ$.  
 Episodes terminate when height leaves $[4.5,5.5]$ for a sustained window or when the maximum number of steps is reached.
 
 ---

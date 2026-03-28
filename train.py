@@ -51,7 +51,7 @@ def run_episode(env: QuadrupedEnv, agent: QuadrupedAgent, epsilon: float, render
 
         # Exécuter l'action dans l'environnement
         next_state, reward, done, step_time = env.step(shoulders, elbows)
-        if step == MAX_STEPS - 1 and not done:
+        if step == MAX_STEPS - 1 and env.last_done_reason == "running":
             reward += TERMINAL_BONUS_MAX_STEPS
             env.last_reward_components["terminal_event_reward"] = float(
                 env.last_reward_components.get("terminal_event_reward", 0.0) + TERMINAL_BONUS_MAX_STEPS
@@ -81,7 +81,7 @@ def run_episode(env: QuadrupedEnv, agent: QuadrupedAgent, epsilon: float, render
     print(f"[TRAIN] Nombre de steps: {steps_count}")
 
     metrics = agent.train_model(epsilon)
-    final_done_reason = env.last_done_reason if done else "max_steps"
+    final_done_reason = env.last_done_reason if env.last_done_reason != "running" else "max_steps"
     # Ajouter le nombre de steps aux métriques
     metrics['steps_count'] = steps_count
     metrics['done_reason_too_high'] = 1.0 if final_done_reason == "too_high" else 0.0
