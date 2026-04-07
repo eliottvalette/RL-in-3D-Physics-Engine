@@ -1,203 +1,267 @@
-# update_functions.py
+# update_quad.py
 import numpy as np
 
-
-from ..core.config import DT, GRAVITY, SLIP_THRESHOLD, CONTACT_THRESHOLD_BASE, CONTACT_THRESHOLD_MULTIPLIER
-from ..core.config import MAX_VELOCITY, MAX_ANGULAR_VELOCITY, MAX_IMPULSE, MAX_AVERAGE_IMPULSE, DEBUG_CONTACT, STATIC_FRICTION_CAP
+from ..core.config import CONTACT_BIAS, CONTACT_MANIFOLD_MIN_XZ_SPACING, CONTACT_POSITION_CORRECTION
+from ..core.config import CONTACT_SLOP, CONTACT_THRESHOLD_BASE, CONTACT_THRESHOLD_MULTIPLIER, DEBUG_CONTACT
+from ..core.config import DT, GRAVITY, MAX_ANGULAR_VELOCITY, MAX_CONTACT_POINTS
+from ..core.config import FRICTION, MAX_VELOCITY, NORMAL_SOLVER_ITERATIONS
 from .quadruped import Quadruped
-from ..core.helpers import limit_vector, batch_cross
+from ..core.helpers import limit_vector
+
+
+GROUND_NORMAL = np.array([0.0, 1.0, 0.0], dtype=np.float64)
+
+
+def _contact_group_priority(vertex_idx: int) -> tuple[int, int]:
+    part_index = vertex_idx // 8
+    if part_index >= 5:
+        return (0, part_index)
+    if part_index == 0:
+        return (1, part_index)
+    return (2, part_index)
+
+
+def _select_contact_indices(vertices: np.ndarray, contact_threshold: float) -> np.ndarray:
+    candidate_indices = np.flatnonzero(vertices[:, 1] <= contact_threshold)
+    if candidate_indices.size == 0:
+        return np.empty(0, dtype=np.int64)
+
+    groups: dict[int, list[int]] = {}
+    for idx in candidate_indices.tolist():
+        groups.setdefault(int(idx // 8), []).append(int(idx))
+
+    selected: list[int] = []
+    ordered_groups = sorted(
+        groups.items(),
+        key=lambda item: (_contact_group_priority(item[0] * 8), float(vertices[item[1], 1].min())),
+    )
+
+    for _, indices in ordered_groups:
+        group_sorted = sorted(indices, key=lambda idx: float(vertices[idx, 1]))
+        group_selected = 0
+
+        for idx in group_sorted:
+            point_xz = vertices[idx, [0, 2]]
+            if all(
+                np.linalg.norm(point_xz - vertices[selected_idx, [0, 2]]) >= CONTACT_MANIFOLD_MIN_XZ_SPACING
+                for selected_idx in selected
+            ):
+                selected.append(idx)
+                group_selected += 1
+            if len(selected) >= MAX_CONTACT_POINTS or group_selected >= 2:
+                break
+
+        if len(selected) >= MAX_CONTACT_POINTS:
+            break
+
+    if len(selected) < min(MAX_CONTACT_POINTS, candidate_indices.size):
+        sorted_indices = candidate_indices[np.argsort(vertices[candidate_indices, 1])]
+        for idx in sorted_indices:
+            idx = int(idx)
+            if idx in selected:
+                continue
+            selected.append(idx)
+            if len(selected) >= MAX_CONTACT_POINTS:
+                break
+
+    return np.array(selected, dtype=np.int64)
+
+
+def _point_velocity(
+    quadruped: Quadruped,
+    com_offset_world: np.ndarray,
+    lever_arm_from_com: np.ndarray,
+    articulation_velocity_world: np.ndarray,
+) -> np.ndarray:
+    com_velocity = quadruped.velocity + np.cross(quadruped.angular_velocity, com_offset_world)
+    return com_velocity + np.cross(quadruped.angular_velocity, lever_arm_from_com) + articulation_velocity_world
+
+
+def _apply_impulse(
+    quadruped: Quadruped,
+    impulse: np.ndarray,
+    lever_arm_from_com: np.ndarray,
+    com_offset_world: np.ndarray,
+    mass: float,
+    inverse_inertia_world: np.ndarray,
+):
+    com_velocity = quadruped.velocity + np.cross(quadruped.angular_velocity, com_offset_world)
+    com_velocity += impulse / mass
+    quadruped.angular_velocity += inverse_inertia_world @ np.cross(lever_arm_from_com, impulse)
+    quadruped.velocity = com_velocity - np.cross(quadruped.angular_velocity, com_offset_world)
+
+
+def _solve_contact_constraints(
+    quadruped: Quadruped,
+    current_vertices: np.ndarray,
+    mass: float,
+    inverse_inertia_world: np.ndarray,
+    contact_threshold: float,
+    articulation_world_velocities: np.ndarray,
+) -> np.ndarray:
+    contact_indices = _select_contact_indices(current_vertices, contact_threshold)
+    quadruped.active_contact_indices = contact_indices.copy()
+    if contact_indices.size == 0:
+        return current_vertices
+
+    accumulated_normal_impulses = np.zeros(contact_indices.shape[0], dtype=np.float64)
+    accumulated_tangent_impulses = np.zeros((contact_indices.shape[0], 3), dtype=np.float64)
+    max_penetration = 0.0
+    com_offset_world = quadruped.get_world_center_of_mass_offset()
+    com_position = quadruped.position + com_offset_world
+
+    for _ in range(NORMAL_SOLVER_ITERATIONS):
+        for local_idx, vertex_idx in enumerate(contact_indices):
+            point = current_vertices[vertex_idx]
+            penetration = max(0.0, -float(point[1]))
+            max_penetration = max(max_penetration, penetration)
+
+            lever_arm_from_com = point - com_position
+            vertex_velocity = _point_velocity(
+                quadruped=quadruped,
+                com_offset_world=com_offset_world,
+                lever_arm_from_com=lever_arm_from_com,
+                articulation_velocity_world=articulation_world_velocities[vertex_idx],
+            )
+            normal_velocity = float(np.dot(vertex_velocity, GROUND_NORMAL))
+
+            if penetration <= 0.0 and normal_velocity >= 0.0:
+                continue
+
+            bias = CONTACT_BIAS * max(0.0, penetration - CONTACT_SLOP) / DT
+            r_cross_n = np.cross(lever_arm_from_com, GROUND_NORMAL)
+            inv_inertia_term = inverse_inertia_world @ r_cross_n
+            denom = (1.0 / mass) + float(np.dot(GROUND_NORMAL, np.cross(inv_inertia_term, lever_arm_from_com)))
+
+            if denom <= 1e-9:
+                continue
+
+            impulse_delta = -(normal_velocity + bias) / denom
+            new_accumulated = max(0.0, accumulated_normal_impulses[local_idx] + impulse_delta)
+            impulse_delta = new_accumulated - accumulated_normal_impulses[local_idx]
+            if impulse_delta <= 0.0:
+                new_accumulated = accumulated_normal_impulses[local_idx]
+            else:
+                accumulated_normal_impulses[local_idx] = new_accumulated
+                impulse = GROUND_NORMAL * impulse_delta
+
+                _apply_impulse(
+                    quadruped=quadruped,
+                    impulse=impulse,
+                    lever_arm_from_com=lever_arm_from_com,
+                    com_offset_world=com_offset_world,
+                    mass=mass,
+                    inverse_inertia_world=inverse_inertia_world,
+                )
+
+            if accumulated_normal_impulses[local_idx] <= 0.0:
+                continue
+
+            vertex_velocity = _point_velocity(
+                quadruped=quadruped,
+                com_offset_world=com_offset_world,
+                lever_arm_from_com=lever_arm_from_com,
+                articulation_velocity_world=articulation_world_velocities[vertex_idx],
+            )
+            tangent_velocity = vertex_velocity - GROUND_NORMAL * float(np.dot(vertex_velocity, GROUND_NORMAL))
+            tangent_speed = float(np.linalg.norm(tangent_velocity))
+
+            if tangent_speed <= 1e-6:
+                continue
+
+            tangent_direction = tangent_velocity / tangent_speed
+            r_cross_t = np.cross(lever_arm_from_com, tangent_direction)
+            inv_inertia_term_t = inverse_inertia_world @ r_cross_t
+            tangent_denom = (1.0 / mass) + float(np.dot(tangent_direction, np.cross(inv_inertia_term_t, lever_arm_from_com)))
+
+            if tangent_denom <= 1e-9:
+                continue
+
+            tangent_impulse_delta_mag = -tangent_speed / tangent_denom
+            previous_tangent_impulse = accumulated_tangent_impulses[local_idx]
+            candidate_tangent_impulse = previous_tangent_impulse + tangent_direction * tangent_impulse_delta_mag
+            friction_limit = FRICTION * accumulated_normal_impulses[local_idx]
+            candidate_norm = float(np.linalg.norm(candidate_tangent_impulse))
+
+            if candidate_norm > friction_limit and candidate_norm > 1e-9:
+                candidate_tangent_impulse *= friction_limit / candidate_norm
+
+            tangent_impulse_delta = candidate_tangent_impulse - previous_tangent_impulse
+            if np.linalg.norm(tangent_impulse_delta) <= 1e-9:
+                continue
+
+            accumulated_tangent_impulses[local_idx] = candidate_tangent_impulse
+            _apply_impulse(
+                quadruped=quadruped,
+                impulse=tangent_impulse_delta,
+                lever_arm_from_com=lever_arm_from_com,
+                com_offset_world=com_offset_world,
+                mass=mass,
+                inverse_inertia_world=inverse_inertia_world,
+            )
+
+    if max_penetration > CONTACT_SLOP:
+        position_correction = CONTACT_POSITION_CORRECTION * (max_penetration - CONTACT_SLOP)
+        quadruped.position[1] += position_correction
+        quadruped._needs_update = True
+        current_vertices = quadruped.get_vertices()
+
+    if DEBUG_CONTACT:
+        print(
+            f"[CONTACT N] points={contact_indices.size} max_pen={max_penetration:.5f} "
+            f"vel={quadruped.velocity} ang={quadruped.angular_velocity}"
+        )
+
+    return current_vertices
 
 
 def update_quadruped(quadruped: Quadruped):
     """
-    Collision avancée entre le quadruped et le sol avec gestion améliorée des rebonds.
-    Corrections physiques appliquées :
-    - Correction de pénétration conservatrice
-    - Critères de contact dynamiques
-    - Amortissement réaliste avec restitution et friction
-    - Limitation de vitesse douce
-    - Rotation stable
+    Met a jour le quadruped avec un solveur de contact normal+tangent plus coherent.
+
+    Cette passe se concentre sur :
+    - contacts de repos via une marge de contact
+    - solveur normal sequentiel par point de contact
+    - friction tangentielle de Coulomb simplifiee
+    - correction de penetration moins grossiere
     """
 
-    # Mettre à jour les sommets du cube
+    quadruped._needs_update = True
+    quadruped.get_vertices()
+    local_articulation_velocities = quadruped.get_local_articulation_velocities(DT)
+
+    quadruped.velocity += GRAVITY * DT
+    quadruped.position += quadruped.velocity * DT
+    quadruped.integrate_orientation(DT)
+
     quadruped._needs_update = True
     current_vertices = quadruped.get_vertices()
-    prev_vertices = quadruped.prev_vertices if quadruped.prev_vertices is not None else current_vertices
+    mass = quadruped.mass
+    inverse_inertia_world = quadruped.get_world_inverse_inertia()
+    articulation_world_velocities = local_articulation_velocities @ quadruped.get_rotation_matrix().T
 
-    
-    # --- paramètres corps -----------------------------
-    mass = quadruped.mass          # ≈ 4.4 kg
-    I    = quadruped.I_body.copy() # (3,)
+    contact_threshold = max(
+        CONTACT_THRESHOLD_BASE,
+        abs(float(quadruped.velocity[1])) * DT * CONTACT_THRESHOLD_MULTIPLIER,
+    )
 
-    # Appliquer la gravité au centre de masse
-    quadruped.velocity += GRAVITY * DT
+    current_vertices = _solve_contact_constraints(
+        quadruped=quadruped,
+        current_vertices=current_vertices,
+        mass=mass,
+        inverse_inertia_world=inverse_inertia_world,
+        contact_threshold=contact_threshold,
+        articulation_world_velocities=articulation_world_velocities,
+    )
 
-    # Mise à jour de la position et de la rotation
-    quadruped.position += quadruped.velocity * DT
-    quadruped.rotation = (quadruped.rotation + quadruped.angular_velocity * DT) % (2 * np.pi)
-    
-    # Recalculer les sommets après mise à jour
-    current_vertices = quadruped.get_vertices()
-    
-    # Critères de contact dynamiques
-    contact_threshold = max(CONTACT_THRESHOLD_BASE, abs(quadruped.velocity[1]) * DT * CONTACT_THRESHOLD_MULTIPLIER)
-
-    # Limitation de vitesse douce
     quadruped.velocity = limit_vector(quadruped.velocity, MAX_VELOCITY)
     quadruped.angular_velocity = limit_vector(quadruped.angular_velocity, MAX_ANGULAR_VELOCITY)
 
-    # Calculer la pénétration maximale sur tous les sommets
-    penetrations = []
-
-    # --- on sépare maintenant vertical (normal) et tangentiel ---
-    collision_impulses_normal = []
-    collision_angular_impulses_normal = []
-    collision_impulses_tangent = []
-    collision_angular_impulses_tangent = []
-    
-    # Filtrer les vertices en collision avec le sol
-    collision_vertices = [vertex for vertex in current_vertices if vertex[1] < 0]
-    
-    if collision_vertices:
-        # Préparer les données pour calculs vectorisés
-        collision_vertices = np.array(collision_vertices)
-        relative_positions = collision_vertices - quadruped.position
-        
-        # Calculer les vitesses des vertices (translation + rotation)
-        # Utiliser batch_cross pour optimiser
-        angular_contributions = batch_cross(
-            np.full((len(collision_vertices), 3), quadruped.angular_velocity),
-            relative_positions
-        )
-        vertex_velocities = quadruped.velocity + angular_contributions
-        
-        # Filtrer les vertices qui descendent
-        descending_mask = vertex_velocities[:, 1] < 0
-        if np.any(descending_mask):
-            descending_vertices = collision_vertices[descending_mask]
-            descending_relative_positions = relative_positions[descending_mask]
-            descending_velocities = vertex_velocities[descending_mask]
-            
-            # Enregistrer les pénétrations
-            penetrations.extend(-descending_vertices[:, 1])
-            
-            # Normal du sol pour tous les vertices
-            normals = np.full((len(descending_vertices), 3), [0, 1, 0])
-            
-            # Calculer les vitesses relatives
-            relative_velocities = np.sum(descending_velocities * normals, axis=1)
-            
-            # Calculer r_cross_n pour tous les vertices
-            r_cross_n = batch_cross(descending_relative_positions, normals)
-            
-            # Calculer les dénominateurs pour tous les vertices
-            r_cross_n_div_I = np.divide(r_cross_n, I, out=np.zeros_like(r_cross_n), where=I!=0)
-            r_cross_n_div_I_cross_r = batch_cross(r_cross_n_div_I, descending_relative_positions)
-            dot_terms = np.sum(normals * r_cross_n_div_I_cross_r, axis=1)
-            denoms = (1/mass) + dot_terms
-            
-            # Calculer les impulsions scalaires
-            valid_denoms = denoms != 0
-            if np.any(valid_denoms):
-                scalar_impulses = -relative_velocities[valid_denoms] / denoms[valid_denoms]
-                scalar_impulses = np.clip(scalar_impulses, -MAX_IMPULSE, MAX_IMPULSE)
-                
-                # Calculer les impulsions normales
-                normal_impulses = (scalar_impulses[:, np.newaxis] * normals[valid_denoms]) / mass
-                collision_impulses_normal.extend(normal_impulses)
-                
-                # Calculer les impulsions angulaires
-                angular_impulses = np.divide(
-                    batch_cross(descending_relative_positions[valid_denoms], 
-                               scalar_impulses[:, np.newaxis] * normals[valid_denoms]),
-                    I, out=np.zeros((len(scalar_impulses), 3)), where=I!=0
-                )
-                collision_angular_impulses_normal.extend(angular_impulses)
-    
-    # Appliquer la correction de position une seule fois
-    if penetrations:
-        mean_penetration = np.mean(penetrations)
-        if DEBUG_CONTACT:
-            print(f"[CORRECTION] Correction de position appliquée: +{mean_penetration * 0.2:.5f}")
-        quadruped.position[1] += mean_penetration * 0.2
-
-    # --- Moyenne et application des impulsions verticales ---
-    if collision_impulses_normal:
-        avg_imp_n = limit_vector(np.mean(collision_impulses_normal, axis=0), MAX_AVERAGE_IMPULSE)
-        avg_ang_n = limit_vector(np.mean(collision_angular_impulses_normal, axis=0), MAX_AVERAGE_IMPULSE)
-        if DEBUG_CONTACT:
-            print(f"[IMPULSES N] Moyenne impulsion normale: {avg_imp_n}, angulaire: {avg_ang_n}")
-        quadruped.velocity += avg_imp_n
-        quadruped.angular_velocity += avg_ang_n
-
-    # --- Moyenne et application des impulsions tangentielles ---
-    if collision_impulses_tangent:
-        avg_imp_t = limit_vector(np.mean(collision_impulses_tangent, axis=0), MAX_AVERAGE_IMPULSE)   # mets un plafond dédié si besoin
-        avg_ang_t = limit_vector(np.mean(collision_angular_impulses_tangent, axis=0), MAX_AVERAGE_IMPULSE)
-        if DEBUG_CONTACT:
-            print(f"[IMPULSES T] Moyenne impulsion tangentielle: {avg_imp_t}, angulaire: {avg_ang_t}")
-        quadruped.velocity += avg_imp_t
-        quadruped.angular_velocity += avg_ang_t
-
-    # --- Ajout : traction latérale basée sur t‑1 ---
-    traction_imp, traction_ang = [], []
-    
-    # Convertir en arrays pour calculs vectorisés
-    prev_vertices_array = np.array(prev_vertices)
-    current_vertices_array = np.array(current_vertices)
-    
-    # Identifier les points au sol
-    previous_on_ground = prev_vertices_array[:, 1] <= contact_threshold
-    current_on_ground = current_vertices_array[:, 1] <= contact_threshold
-    both_on_ground = previous_on_ground & current_on_ground
-    
-    if np.any(both_on_ground):
-        # Extraire les vertices concernés
-        ground_prev = prev_vertices_array[both_on_ground].copy()
-        ground_current = current_vertices_array[both_on_ground].copy()
-        
-        # Normaliser la hauteur (considérer que les points restent au sol)
-        ground_prev[:, 1] = 0
-        ground_current[:, 1] = 0
-        
-        # Calculer les déplacements
-        deltas = ground_current - ground_prev
-        deltas[:, 1] = 0.0  # composante tangentielle
-        
-        # Filtrer par dead zone
-        delta_norms = np.linalg.norm(deltas, axis=1)
-        significant_movement = delta_norms >= SLIP_THRESHOLD * DT
-        
-        if np.any(significant_movement):
-            significant_deltas = deltas[significant_movement]
-            significant_current = ground_current[significant_movement]
-            
-            # Calculer les impulsions nécessaires
-            J_needed = -mass * significant_deltas / DT  # N·s
-            J_cap = STATIC_FRICTION_CAP * DT  # adhérence max
-            J_clipped = np.clip(J_needed, -J_cap, J_cap)
-            
-            # Impulsions linéaires
-            traction_imp.extend(J_clipped / mass)
-            
-            # Impulsions angulaires (utiliser batch_cross)
-            r_vectors = significant_current - quadruped.position
-            angular_impulses = np.divide(
-                batch_cross(r_vectors, J_clipped),
-                I, out=np.zeros_like(r_vectors), where=I!=0
-            )
-            traction_ang.extend(angular_impulses)
-
-    if traction_imp:
-        if DEBUG_CONTACT:
-            print(f"[TRACTION] Moyenne traction linéaire: {np.mean(traction_imp, axis=0)}, angulaire: {np.mean(traction_ang, axis=0)}")
-        quadruped.velocity += limit_vector(np.mean(traction_imp, axis=0), MAX_AVERAGE_IMPULSE)
-        quadruped.angular_velocity += limit_vector(np.mean(traction_ang, axis=0), MAX_AVERAGE_IMPULSE)
-
-    # Sauvegarder les vertices actuels pour la prochaine itération
-    quadruped.prev_vertices = current_vertices.copy()
+    quadruped._needs_update = True
+    quadruped.prev_vertices = quadruped.get_vertices().copy()
+    quadruped.snapshot_local_geometry()
 
     if DEBUG_CONTACT:
-        print(f"[VELOCITY] Velocity: {quadruped.velocity}, Angular Velocity: {quadruped.angular_velocity}")
-        print(f"[POSITION] Position: {quadruped.position}, Rotation: {quadruped.rotation}")
+        print(f"[VELOCITY] {quadruped.velocity}, [ANGULAR] {quadruped.angular_velocity}")
+        print(f"[POSITION] {quadruped.position}, [ROTATION] {quadruped.rotation}")
         print("------------------------------------------------------------------------------------------------\n")

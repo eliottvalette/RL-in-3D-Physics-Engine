@@ -12,11 +12,7 @@ def test_agent(agent: QuadrupedAgent, env: QuadrupedEnv):
     L'Agent Agir.
     """
 
-    env.quadruped.reset()
-    env.circles_passed.clear()
-    env.prev_potential = None
-    env.consecutive_steps_below_critical_height = 0
-    env.prev_radius = None
+    env.reset_episode()
 
     #### Boucle principale du jeu ####
     running = True
@@ -29,17 +25,13 @@ def test_agent(agent: QuadrupedAgent, env: QuadrupedEnv):
         camera_actions = env.handle_camera_controls(keys)
 
         if keys[K_SPACE]:
-            env.quadruped.reset()
-            env.circles_passed.clear()
-            env.prev_potential = None
-            env.consecutive_steps_below_critical_height = 0
-            env.prev_radius = None
+            env.reset_episode()
         
         # Récupération de l'état actuel
         state = env.get_state()
 
         # Prédiction avec une inférence classique du modèle
-        shoulders, elbows, _ = agent.get_action(state = state, epsilon = 0.0)
+        shoulders, elbows, _ = agent.get_action(state=state, deterministic=True)
 
         # Prédiction de la valeur de l'état
         state_tensor = torch.FloatTensor(state).unsqueeze(0)
@@ -52,11 +44,7 @@ def test_agent(agent: QuadrupedAgent, env: QuadrupedEnv):
         env.render(reward, done, step_time, state_value)
 
         if done:
-            env.quadruped.reset()
-            env.circles_passed.clear()
-            env.prev_potential = None
-            env.consecutive_steps_below_critical_height = 0
-            env.prev_radius = None
+            env.reset_episode()
 
 
 def build_test_agent():

@@ -29,7 +29,7 @@ if PROFILING:
     profiler.enable()
 
 # Démarrer l'entraînement
-main_training_loop(agent, episodes=EPISODES, rendering=RENDERING, render_every=100)
+main_training_loop(agent, episodes=EPISODES, rendering=RENDERING, render_every=25)
 
 if PROFILING:
     profiler.disable()
