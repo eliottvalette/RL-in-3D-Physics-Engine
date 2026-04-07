@@ -128,9 +128,9 @@ The quadruped environment is not built on MuJoCo, Bullet, or Isaac Gym. It uses 
 
 The environment observation is:
 
-$$
+```math
 \mathbf{s}_t \in \mathbb{R}^{75}.
-$$
+```
 
 It extends the quadruped's internal 59-dimensional state with joint-limit counters and previous action:
 
@@ -148,14 +148,14 @@ It extends the quadruped's internal 59-dimensional state with joint-limit counte
 
 The action is an 8-dimensional discrete vector:
 
-$$
+```math
 \mathbf{a}_t =
 \begin{bmatrix}
 a_{t,1} & \cdots & a_{t,8}
 \end{bmatrix},
 \qquad
 a_{t,j} \in \{-1,0,1\}.
-$$
+```
 
 The first 4 components control shoulders; the last 4 control elbows. Each component is converted into a target joint speed scaled by `SHOULDER_DELTA` or `ELBOW_DELTA`.
 
@@ -163,15 +163,15 @@ The first 4 components control shoulders; the last 4 control elbows. Each compon
 
 Forward progress is measured along negative world $z$:
 
-$$
+```math
 d_t = -p_{t,z},
 \qquad
 \Delta d_t = d_t - d_{t-1}.
-$$
+```
 
 The current reward contract is:
 
-$$
+```math
 r_t =
 \begin{cases}
 \kappa\,\Delta d_t, & \text{if posture is valid},\\
@@ -179,7 +179,7 @@ p_{\mathrm{terminal}}, & \text{if posture is invalid},
 \end{cases}
 \qquad
 \kappa = 1.0.
-$$
+```
 
 The active terminal failures are:
 
@@ -198,15 +198,15 @@ The active terminal failures are:
 
 The engine uses its own length unit. The current scale is:
 
-$$
+```math
 1\ \text{engine unit} = 0.20\ \text{m}.
-$$
+```
 
 The fixed time step is:
 
-$$
+```math
 \Delta t = \frac{1}{120}.
-$$
+```
 
 Rendering is decoupled from physics by `PHYSICS_STEPS_PER_RENDER`.
 
@@ -214,9 +214,9 @@ Rendering is decoupled from physics by `PHYSICS_STEPS_PER_RENDER`.
 
 The body state is:
 
-$$
+```math
 \left(\mathbf{p},\mathbf{v},q,\boldsymbol{\omega}\right),
-$$
+```
 
 where:
 
@@ -229,10 +229,10 @@ where:
 
 The body origin is not necessarily the center of mass. The world center of mass is:
 
-$$
+```math
 \mathbf{p}_{\mathrm{com}}
 = \mathbf{p} + R(q)\,\mathbf{c}_{\mathrm{local}},
-$$
+```
 
 where $R(q)$ is the rotation matrix from the current quaternion and $\mathbf{c}_{\mathrm{local}}$ is the local center of mass.
 
@@ -246,10 +246,10 @@ body + 4 upper legs + 4 lower legs
 
 Each part has 8 vertices. Shoulder and elbow rotations transform local vertices before the global body transform is applied:
 
-$$
+```math
 \mathbf{x}_{i}^{\mathrm{world}}
 = R(q)\,\mathbf{x}_{i}^{\mathrm{local, articulated}} + \mathbf{p}.
-$$
+```
 
 For an upper leg, the local transform is a shoulder rotation around the leg shoulder anchor. For a lower leg, the local transform applies the shoulder rotation first, then an elbow rotation around the transformed elbow anchor.
 
@@ -265,14 +265,14 @@ Current part masses are:
 
 The local center of mass is recomputed from the transformed part centers:
 
-$$
+```math
 \mathbf{c}
 = \frac{\sum_i m_i \mathbf{c}_i}{\sum_i m_i}.
-$$
+```
 
 Each part is approximated as a box. For part dimensions $(d_x,d_y,d_z)$:
 
-$$
+```math
 I_{\mathrm{box}}
 =
 \begin{bmatrix}
@@ -280,56 +280,56 @@ I_{\mathrm{box}}
 0 & \frac{m}{12}(d_x^2+d_z^2) & 0\\
 0 & 0 & \frac{m}{12}(d_x^2+d_y^2)
 \end{bmatrix}.
-$$
+```
 
 The total inertia uses the parallel-axis theorem:
 
-$$
+```math
 I_{\mathrm{body}}
 {}+= R_i I_{\mathrm{box},i} R_i^\top
 {}+ m_i\left(\|\mathbf{d}_i\|^2 I - \mathbf{d}_i\mathbf{d}_i^\top\right),
-$$
+```
 
 with:
 
-$$
+```math
 \mathbf{d}_i = \mathbf{c}_i - \mathbf{c}.
-$$
+```
 
 The world inverse inertia is:
 
-$$
+```math
 I_{\mathrm{world}}^{-1}
 = R(q)\,I_{\mathrm{body}}^{-1}\,R(q)^\top.
-$$
+```
 
 ### 4.5 Joint Motor Model
 
 Actions do not directly set joint angles. They set a target speed:
 
-$$
+```math
 v_{\mathrm{target}} = \Delta_{\mathrm{joint}}\,a_{t,j}.
-$$
+```
 
 The internal motor update is a damped first-order response:
 
-$$
+```math
 v_j
 \leftarrow
 v_j + \alpha\left(v_{\mathrm{target}} - v_j\right),
-$$
+```
 
-$$
+```math
 v_j
 \leftarrow
 v_j(1-\eta),
-$$
+```
 
-$$
+```math
 \theta_j
 \leftarrow
-\operatorname{clip}\left(\theta_j + v_j,\ -\frac{\pi}{2},\ \frac{\pi}{2}\right).
-$$
+\mathrm{clip}\left(\theta_j + v_j,\ -\frac{\pi}{2},\ \frac{\pi}{2}\right).
+```
 
 `MOTOR_DIFFICULTY` modulates response and damping. At the joint limits, velocities pushing further into the limit are zeroed.
 
@@ -337,50 +337,50 @@ $$
 
 The linear update is semi-implicit:
 
-$$
+```math
 \mathbf{v}
 \leftarrow
 \mathbf{v} + \mathbf{g}\Delta t,
-$$
+```
 
-$$
+```math
 \mathbf{p}
 \leftarrow
 \mathbf{p} + \mathbf{v}\Delta t.
-$$
+```
 
 Orientation uses an incremental quaternion:
 
-$$
+```math
 \theta = \|\boldsymbol{\omega}\|\Delta t,
 \qquad
 \mathbf{u} = \frac{\boldsymbol{\omega}}{\|\boldsymbol{\omega}\|},
-$$
+```
 
-$$
+```math
 \Delta q =
 \begin{bmatrix}
 \cos(\theta/2)\\
 \mathbf{u}\sin(\theta/2)
 \end{bmatrix},
 \qquad
-q \leftarrow \operatorname{normalize}(\Delta q \otimes q).
-$$
+q \leftarrow \mathrm{normalize}(\Delta q \otimes q).
+```
 
 ### 4.7 Contact Candidate Selection
 
 The contact solver operates on vertices near the ground plane:
 
-$$
+```math
 y_i \le h_{\mathrm{contact}}.
-$$
+```
 
 The contact threshold expands with vertical velocity:
 
-$$
+```math
 h_{\mathrm{contact}}
 = \max\left(h_0,\ |\mathbf{v}_y|\Delta t\,\alpha\right).
-$$
+```
 
 The solver keeps at most `MAX_CONTACT_POINTS` vertices and enforces a minimum spacing in the $(x,z)$ plane to avoid over-constraining clusters of nearly identical contact points.
 
@@ -388,20 +388,20 @@ The solver keeps at most `MAX_CONTACT_POINTS` vertices and enforces a minimum sp
 
 For a contact point, define:
 
-$$
+```math
 \mathbf{r} = \mathbf{x}_{\mathrm{contact}} - \mathbf{p}_{\mathrm{com}},
-$$
+```
 
-$$
+```math
 \mathbf{v}_{\mathrm{contact}}
 = \mathbf{v}_{\mathrm{com}}
 {}+ \boldsymbol{\omega} \times \mathbf{r}
 {}+ \mathbf{v}_{\mathrm{articulation}}.
-$$
+```
 
 The normal velocity is:
 
-$$
+```math
 v_n = \mathbf{v}_{\mathrm{contact}}\cdot\mathbf{n},
 \qquad
 \mathbf{n} =
@@ -410,17 +410,17 @@ v_n = \mathbf{v}_{\mathrm{contact}}\cdot\mathbf{n},
 1\\
 0
 \end{bmatrix}.
-$$
+```
 
 A Baumgarte-style bias compensates penetration:
 
-$$
+```math
 b = \beta\,\frac{\max(0,\ \mathrm{penetration}-\mathrm{slop})}{\Delta t}.
-$$
+```
 
 The effective mass denominator along the normal is:
 
-$$
+```math
 D_n
 = \frac{1}{m}
 {}+ \mathbf{n}\cdot
@@ -428,85 +428,85 @@ D_n
 \left(I_{\mathrm{world}}^{-1}(\mathbf{r}\times\mathbf{n})\right)
 \times \mathbf{r}
 \right).
-$$
+```
 
 The normal impulse increment is:
 
-$$
+```math
 \Delta j_n
 = -\frac{v_n + b}{D_n}.
-$$
+```
 
 Accumulated normal impulse is clamped to be non-negative:
 
-$$
+```math
 j_n \leftarrow \max(0,\ j_n + \Delta j_n).
-$$
+```
 
 The impulse is applied as:
 
-$$
+```math
 \mathbf{v}_{\mathrm{com}}
 \leftarrow
 \mathbf{v}_{\mathrm{com}} + \frac{\mathbf{J}}{m},
-$$
+```
 
-$$
+```math
 \boldsymbol{\omega}
 \leftarrow
 \boldsymbol{\omega}
 {}+ I_{\mathrm{world}}^{-1}(\mathbf{r}\times\mathbf{J}).
-$$
+```
 
 ### 4.9 Tangential Friction Solver
 
 The tangential velocity is:
 
-$$
+```math
 \mathbf{v}_t
 = \mathbf{v}_{\mathrm{contact}}
 {}- (\mathbf{v}_{\mathrm{contact}}\cdot\mathbf{n})\mathbf{n}.
-$$
+```
 
 If $\|\mathbf{v}_t\| > 0$, the tangent direction is:
 
-$$
+```math
 \mathbf{t} = \frac{\mathbf{v}_t}{\|\mathbf{v}_t\|}.
-$$
+```
 
 The tangential impulse is constrained by a Coulomb cone:
 
-$$
+```math
 \|\mathbf{j}_t\| \le \mu j_n.
-$$
+```
 
 In practice the solver accumulates a candidate tangential impulse and clamps its norm:
 
-$$
+```math
 \mathbf{j}_t
 \leftarrow
-\operatorname{clamp}_{\|\cdot\|\le \mu j_n}
+\mathrm{clamp}_{\|\cdot\|\le \mu j_n}
 \left(\mathbf{j}_t + \Delta j_t\,\mathbf{t}\right).
-$$
+```
 
 ### 4.10 Penetration Correction And Velocity Limits
 
 Residual penetration is corrected positionally:
 
-$$
+```math
 \mathbf{p}_y
 \leftarrow
 \mathbf{p}_y
 {}+ c_{\mathrm{pos}}\max(0,\ \mathrm{maxPenetration}-\mathrm{slop}).
-$$
+```
 
 Linear and angular velocities are capped:
 
-$$
+```math
 \|\mathbf{v}\| \le v_{\max},
 \qquad
 \|\boldsymbol{\omega}\| \le \omega_{\max}.
-$$
+```
 
 ### 4.11 Known Approximations
 
@@ -527,13 +527,13 @@ This is a lightweight custom physics engine, not a general rigid-body simulator.
 
 The actor outputs per-joint categorical logits:
 
-$$
+```math
 \pi_\theta(\mathbf{a}_t\mid\mathbf{s}_t)
 =
 \prod_{j=1}^{8}
 \mathrm{Categorical}
 \left(a_{t,j}\mid\mathrm{logits}_{\theta,j}(\mathbf{s}_t)\right).
-$$
+```
 
 This avoids a single $3^8 = 6561$-class action head while still allowing the shared trunk to learn coordination between joints.
 
@@ -543,41 +543,41 @@ Both networks are MLPs with GELU activations and LayerNorm.
 
 The actor maps:
 
-$$
+```math
 \mathbf{s}_t \in \mathbb{R}^{75}
 \longmapsto
 \mathrm{logits}_t \in \mathbb{R}^{8\times 3}.
-$$
+```
 
 The critic maps:
 
-$$
+```math
 \mathbf{s}_t \in \mathbb{R}^{75}
 \longmapsto
 V_\phi(\mathbf{s}_t) \in \mathbb{R}.
-$$
+```
 
 ### 5.3 GAE Returns
 
 For each rollout:
 
-$$
+```math
 \delta_t
 = r_t + \gamma(1-d_t)V_\phi(\mathbf{s}_{t+1})
 {}- V_\phi(\mathbf{s}_t),
-$$
+```
 
-$$
+```math
 A_t
 = \delta_t
 {}+ \gamma\lambda(1-d_t)A_{t+1}.
-$$
+```
 
 Returns are:
 
-$$
+```math
 R_t = A_t + V_\phi(\mathbf{s}_t).
-$$
+```
 
 Advantages are normalized before the policy update.
 
@@ -585,24 +585,24 @@ Advantages are normalized before the policy update.
 
 The old behavior policy is represented by stored rollout log-probabilities:
 
-$$
+```math
 \log \pi_{\mathrm{old}}(\mathbf{a}_t\mid\mathbf{s}_t).
-$$
+```
 
 The PPO ratio is:
 
-$$
+```math
 \rho_t(\theta)
 =
 \exp\left(
 \log \pi_\theta(\mathbf{a}_t\mid\mathbf{s}_t)
 {}- \log \pi_{\mathrm{old}}(\mathbf{a}_t\mid\mathbf{s}_t)
 \right).
-$$
+```
 
 The clipped actor objective is:
 
-$$
+```math
 \mathcal{L}_{\pi}
 =
 {}-\mathbb{E}_t
@@ -610,29 +610,29 @@ $$
 \min
 \left(
 \rho_t A_t,
-\operatorname{clip}(\rho_t,1-\epsilon,1+\epsilon)A_t
+\mathrm{clip}(\rho_t,1-\epsilon,1+\epsilon)A_t
 \right)
 \right]
 {}- \beta\,\mathbb{E}_t
 \left[
 \mathcal{H}\left(\pi_\theta(\cdot\mid\mathbf{s}_t)\right)
 \right].
-$$
+```
 
 The critic loss is:
 
-$$
+```math
 \mathcal{L}_{V}
 =
 \mathbb{E}_t
 \left[
 \left(V_\phi(\mathbf{s}_t)-R_t\right)^2
 \right].
-$$
+```
 
 Training uses minibatches, several epochs per rollout, gradient clipping, and an approximate KL early stop:
 
-$$
+```math
 \widehat{D}_{\mathrm{KL}}
 \approx
 \mathbb{E}_t
@@ -640,7 +640,7 @@ $$
 \log \pi_{\mathrm{old}}(\mathbf{a}_t\mid\mathbf{s}_t)
 {}- \log \pi_\theta(\mathbf{a}_t\mid\mathbf{s}_t)
 \right].
-$$
+```
 
 ### 5.5 Exploration
 
