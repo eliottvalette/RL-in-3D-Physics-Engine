@@ -73,6 +73,7 @@ class QuadrupedEnv:
         self.circles_passed = set()         # stocke les rayons déjà comptés
         self.prev_radius   = None     # distance horizontale au pas t‑1
         self.prev_potential = None
+        self.cumulative_locomotion_reward = 0.0
         self.rot_penalty_coef = 0.5
         self.gait_reward_coef = 0.5
         self.consecutive_steps_below_critical_height = 0
@@ -127,6 +128,7 @@ class QuadrupedEnv:
         self.circles_passed.clear()
         self.prev_potential = None
         self.prev_radius = None
+        self.cumulative_locomotion_reward = 0.0
         self.prev_action.fill(0.0)
         self._reset_safety_counters()
         self.last_reward_components = {}
@@ -327,23 +329,24 @@ class QuadrupedEnv:
             dtype=np.float32,
         )
         # ---- REWARD ---
-        # ----------  a) progression avant bornee et stabilisee ----------------------
-        forward_progress = max(0.0, -float(self.quadruped.position[2]))
+        # ----------  a) progression avant signee --------------
+        forward_progress = -float(self.quadruped.position[2])
+        progress_delta = 0.0
+        normalized_delta = 0.0
         if self.prev_potential is None:
             distance_reward = 0.0
         else:
             progress_delta = forward_progress - self.prev_potential
-            normalized_delta = np.clip(progress_delta / max(PROGRESS_REWARD_STEP_SCALE, 1e-6), -1.0, 1.0)
-            distance_reward = PROGRESS_REWARD_COEF * float(normalized_delta)
+            normalized_delta = progress_delta / max(PROGRESS_REWARD_STEP_SCALE, 1e-6)
+            distance_reward = PROGRESS_REWARD_COEF * float(progress_delta)
         self.prev_potential = forward_progress
         self.prev_radius = forward_progress
 
         # ----------  b) vitesse avant saturante sans vitesse cible imposee ---------
         forward_speed = -float(self.quadruped.velocity[2])
         positive_speed = max(0.0, forward_speed)
-        z_speed_reward = FORWARD_SPEED_REWARD_COEF * float(
-            np.tanh(positive_speed / max(FORWARD_SPEED_SCALE, 1e-6))
-        )
+        forward_speed_signal = float(np.tanh(positive_speed / max(FORWARD_SPEED_SCALE, 1e-6)))
+        z_speed_reward = FORWARD_SPEED_REWARD_COEF * forward_speed_signal
 
         # ----------  c) posture et qualite du mouvement ----------------------------
         forward_tilt, side_tilt = self._compute_body_tilt_angles()
@@ -375,7 +378,7 @@ class QuadrupedEnv:
             self.consecutive_steps_below_critical_height = 0
             self.consecutive_steps_above_critical_height = 0
 
-        critically_tilted = max_tilt > CRITICAL_TILT_ANGLE
+        critically_tilted = max_tilt > MAX_VALID_TILT_ANGLE
         if critically_tilted:
             self.consecutive_steps_critical_tilt += 1
         else:
@@ -404,16 +407,10 @@ class QuadrupedEnv:
         action_delta = current_action - self.prev_action
         action_smoothness_penalty = -ACTION_SMOOTHNESS_PENALTY_COEF * float(np.mean(np.square(action_delta)))
 
-        tilt_reward_scale = self._compute_tilt_reward_scale(max_tilt)
-        height_reward_scale = self._compute_height_reward_scale(body_height)
+        tilt_reward_scale = 1.0 if max_tilt <= MAX_VALID_TILT_ANGLE else 0.0
+        height_reward_scale = 1.0 if MIN_BODY_HEIGHT <= body_height <= MAX_BODY_HEIGHT else 0.0
         raw_pose_scale = tilt_reward_scale * height_reward_scale
-        locomotion_reward_scale = 0.35 + 0.65 * raw_pose_scale
-
-        # Les rewards locomotion sont gates par la qualite de posture, tandis que les
-        # penalties structurelles restent faibles mais explicites.
-        distance_reward *= locomotion_reward_scale
-        z_speed_reward *= locomotion_reward_scale
-        sparse_reward *= locomotion_reward_scale
+        locomotion_reward_scale = raw_pose_scale
         stability_bonus = 0.0
 
         joint_limit_timeout = (
@@ -424,19 +421,19 @@ class QuadrupedEnv:
         done_reason = "running"
         terminal_event_reward = 0.0
 
-        # Les etats graves restent penalises, mais ne terminent plus l'episode.
-        # L'objectif est d'eviter que l'agent apprenne a provoquer une terminaison
-        # anticipee plutot qu'a se corriger et continuer a marcher.
-        if self.consecutive_steps_above_critical_height > 20:
+        if below_critical_height:
+            done_reason = "too_low"
+            terminal_event_reward = TERMINAL_PENALTY_TOO_LOW
+        elif above_critical_height:
             done_reason = "too_high"
             terminal_event_reward = TERMINAL_PENALTY_TOO_HIGH
-        elif self.consecutive_steps_critical_tilt > MAX_CONSECUTIVE_CRITICAL_TILT_STEPS:
+        elif max_tilt > MAX_VALID_TILT_ANGLE:
             done_reason = "critical_tilt"
             terminal_event_reward = TERMINAL_PENALTY_CRITICAL_TILT
         elif joint_limit_timeout:
             done_reason = "joint_limit_timeout"
             terminal_event_reward = TERMINAL_PENALTY_JOINT_LIMIT_TIMEOUT
-        done = False
+        done = done_reason != "running"
 
         # Inform the quadruped that it is in danger
         self.quadruped.too_high = above_critical_height
@@ -445,19 +442,26 @@ class QuadrupedEnv:
         self.quadruped.steps_since_too_low = self.consecutive_steps_below_critical_height
 
         # ----------  d)  Somme finale -------------------------
-        reward = (distance_reward
-                  + z_speed_reward
-                  + sparse_reward
-                  + tilt_penalty
-                  + joint_limit_penalty
-                  + angular_velocity_penalty
-                  + action_smoothness_penalty
-                  + height_penalty
-                  + stability_bonus
-                  + terminal_event_reward)
+        # Objectif propre: si la posture est invalide, l'episode echoue et ne
+        # touche aucune reward de locomotion. Sinon seul le progres avant signe
+        # sert de signal d'optimisation.
+        locomotion_reward = distance_reward if not done else 0.0
+        if done:
+            reward = terminal_event_reward
+        else:
+            reward = locomotion_reward
+            self.cumulative_locomotion_reward += locomotion_reward
         self.last_reward_components = {
             "distance_reward": float(distance_reward),
+            "locomotion_reward": float(locomotion_reward),
+            "cumulative_locomotion_reward": float(self.cumulative_locomotion_reward),
             "z_speed_reward": float(z_speed_reward),
+            "forward_progress": float(forward_progress),
+            "clipped_forward_progress": float(max(0.0, forward_progress)),
+            "progress_delta": float(progress_delta),
+            "normalized_progress_delta": float(normalized_delta),
+            "forward_speed": float(forward_speed),
+            "forward_speed_signal": float(forward_speed_signal),
             "sparse_reward": float(sparse_reward),
             "tilt_penalty": float(tilt_penalty),
             "gait_reward": float(gait_reward),

@@ -21,7 +21,7 @@ from physics_env.envs.quadruped_env import QuadrupedEnv
 from visualization import DataCollector
 
 
-EVENT_KEYS = ("too_high", "critical_tilt", "joint_limit_timeout")
+EVENT_KEYS = ("too_low", "too_high", "critical_tilt", "joint_limit_timeout")
 
 
 def _new_event_flags():
@@ -36,6 +36,7 @@ def _update_event_flags(event_flags, done_reason):
 def _event_metrics(event_flags):
     clean_episode = not any(event_flags.values())
     return {
+        "done_reason_too_low": 1.0 if event_flags["too_low"] else 0.0,
         "done_reason_too_high": 1.0 if event_flags["too_high"] else 0.0,
         "done_reason_critical_tilt": 1.0 if event_flags["critical_tilt"] else 0.0,
         "done_reason_joint_limit_timeout": 1.0 if event_flags["joint_limit_timeout"] else 0.0,
@@ -125,18 +126,21 @@ def run_evaluation_episode(agent: QuadrupedAgent, env: QuadrupedEnv):
     for _ in range(MAX_STEPS):
         state = env.get_state()
         shoulders, elbows, _ = agent.get_action(state, deterministic=True)
-        _, reward, _, _ = env.step(shoulders, elbows)
+        _, reward, terminated, _ = env.step(shoulders, elbows)
         episode_reward += reward
         locomotion_scale = env.last_reward_components.get("locomotion_reward_scale")
         if locomotion_scale is not None:
             locomotion_scales.append(float(locomotion_scale))
         _update_event_flags(event_flags, env.last_done_reason)
+        if terminated:
+            break
 
     eval_metrics = {
         "eval_episode_reward": float(episode_reward),
         "eval_forward_progress": float(max(0.0, -float(env.quadruped.position[2]))),
         "eval_mean_locomotion_scale": float(np.mean(locomotion_scales)) if locomotion_scales else None,
         "eval_clean_episode": 1.0 if not any(event_flags.values()) else 0.0,
+        "eval_too_low": 1.0 if event_flags["too_low"] else 0.0,
         "eval_too_high": 1.0 if event_flags["too_high"] else 0.0,
         "eval_critical_tilt": 1.0 if event_flags["critical_tilt"] else 0.0,
         "eval_joint_limit_timeout": 1.0 if event_flags["joint_limit_timeout"] else 0.0,
@@ -186,6 +190,11 @@ def main_training_loop(agent: QuadrupedAgent, episodes: int, rendering: bool, re
         save_models(agent, episode)
         print("[TRAIN] Generating visualization...")
         data_collector.force_visualization()
+
+    except KeyboardInterrupt:
+        print("\n[TRAIN] Interrupted by user; saving current model...")
+        save_models(agent, episode)
+        raise
 
     except Exception as exc:
         print(f"[TRAIN] An error occurred: {exc}")

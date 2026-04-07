@@ -434,10 +434,12 @@ class Quadruped:
             upper_start = (1 + leg_idx) * 8        # bloc upper‑leg
             lower_start = (5 + leg_idx) * 8        # bloc lower‑leg
 
-            # on met les 16 sommets dans une seule liste
-            leg_vertices = (
-                vertices[upper_start : upper_start + 8] +
-                vertices[lower_start : lower_start + 8]
+            leg_vertices = np.concatenate(
+                [
+                    vertices[upper_start : upper_start + 8],
+                    vertices[lower_start : lower_start + 8],
+                ],
+                axis=0,
             )
             ys = [v[1] for v in leg_vertices]
             min_max_y.extend([min(ys), max(ys)])

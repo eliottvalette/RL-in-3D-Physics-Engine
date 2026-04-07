@@ -61,6 +61,9 @@ class AgentRolloutTest(unittest.TestCase):
         self.assertEqual(len(metrics["advantages"]), 2)
         self.assertEqual(len(metrics["state_values"]), 2)
         self.assertIn("entropy", metrics)
+        self.assertIn("approx_kl", metrics)
+        self.assertIn("ppo_epochs_completed", metrics)
+        self.assertGreaterEqual(metrics["ppo_epochs_completed"], 1.0)
         self.assertEqual(len(agent.rollout_buffer), 0)
 
 

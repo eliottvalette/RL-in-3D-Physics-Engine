@@ -3,6 +3,8 @@ import numpy as np
 
 from physics_env.core.config import MAX_CONSECUTIVE_JOINT_LIMIT_STEPS, STATE_SIZE
 from physics_env.envs.quadruped_env import QuadrupedEnv
+from physics_env.quadruped.quadruped import Quadruped
+from physics_env.quadruped.quadruped_points import create_quadruped_vertices, get_quadruped_vertices
 
 
 class EnvStateFeaturesTest(unittest.TestCase):
@@ -35,6 +37,27 @@ class EnvStateFeaturesTest(unittest.TestCase):
 
         for actual, expected in zip(actual_prev_action, env.prev_action.tolist()):
             self.assertAlmostEqual(actual, expected, places=6)
+
+    def test_leg_height_features_use_upper_and_lower_vertices(self):
+        vertices = np.zeros((72, 3), dtype=np.float64)
+        vertices_dict = create_quadruped_vertices()
+        quadruped = Quadruped(
+            position=np.array([0.0, 5.5, 0.0], dtype=np.float64),
+            vertices=get_quadruped_vertices(),
+            vertices_dict=vertices_dict,
+        )
+
+        for idx in range(72):
+            vertices[idx, 1] = 100.0
+        vertices[8:16, 1] = 10.0
+        vertices[40:48, 1] = -3.0
+        quadruped.rotated_vertices = vertices
+
+        state = quadruped.get_state()
+        first_leg_min_y, first_leg_max_y = state[31:33]
+
+        self.assertAlmostEqual(first_leg_min_y, -3.0, places=6)
+        self.assertAlmostEqual(first_leg_max_y, 10.0, places=6)
 
 
 if __name__ == "__main__":
