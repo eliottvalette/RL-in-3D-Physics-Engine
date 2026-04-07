@@ -9,13 +9,13 @@ import os
 import json
 import pandas as pd
 from datetime import datetime
-from physics_env.core.config import DEBUG_RL_VIZ, START_EPS, EPS_DECAY, EPS_MIN, PLOT_INTERVAL, SAVE_INTERVAL
+from physics_env.core.config import PLOT_INTERVAL, SAVE_INTERVAL
 
 # Remove PLAYERS
 # PLAYERS = ['Player_0', 'Player_1', 'Player_2']
 
 class DataCollector:
-    def __init__(self, save_interval, plot_interval, start_epsilon, epsilon_decay, epsilon_min, output_dir="temp_viz_json"):
+    def __init__(self, save_interval, plot_interval, output_dir="temp_viz_json"):
         """
         Initialise le collecteur de données.
         
@@ -27,9 +27,6 @@ class DataCollector:
         self.save_interval = save_interval
         self.plot_interval = plot_interval
         self.output_dir = output_dir
-        self.start_epsilon = start_epsilon
-        self.epsilon_decay = epsilon_decay
-        self.epsilon_min = epsilon_min
         self.current_episode_states = []
         self.batch_episode_states = [] # Contient un liste de current_episode_states qui seront ajouté toutes les save_interval dans le fichier json
         self.batch_episode_metrics = [] # Contient les métriques d'entraînement pour chaque épisode
@@ -55,9 +52,6 @@ class DataCollector:
         self.visualizer = Visualizer(
             output_dir=output_dir, 
             viz_dir=self.viz_dir,
-            start_epsilon=start_epsilon, 
-            epsilon_decay=epsilon_decay, 
-            epsilon_min=epsilon_min,
             plot_interval=plot_interval, 
             save_interval=save_interval
         )
@@ -204,12 +198,9 @@ class Visualizer:
     """
     Visualise les métriques d'entraînement RL (quadruped)
     """
-    def __init__(self, start_epsilon, epsilon_decay, epsilon_min, plot_interval, save_interval, output_dir="temp_viz_json", viz_dir=None):
+    def __init__(self, plot_interval, save_interval, output_dir="temp_viz_json", viz_dir=None):
         self.output_dir = output_dir
         self.viz_dir = viz_dir or "visualizations"
-        self.start_epsilon = start_epsilon
-        self.epsilon_decay = epsilon_decay
-        self.epsilon_min = epsilon_min
         self.plot_interval = plot_interval
         self.save_interval = save_interval
         os.makedirs(self.viz_dir, exist_ok=True)
@@ -239,55 +230,6 @@ class Visualizer:
         }
 
     def _metric_value_from_episode(self, episode_metrics, metric_name):
-        if metric_name == "positive_reward_sum":
-            keys = ("distance_reward", "z_speed_reward", "sparse_reward")
-            values = [episode_metrics.get(key) for key in keys]
-            if any(value is not None for value in values):
-                return float(sum(value or 0.0 for value in values))
-            return None
-
-        if metric_name == "penalty_sum":
-            joint_limit_penalty = episode_metrics.get("joint_limit_penalty")
-            if joint_limit_penalty is None:
-                joint_limit_penalty = episode_metrics.get("gait_reward")
-            values = [
-                episode_metrics.get("tilt_penalty"),
-                joint_limit_penalty,
-                episode_metrics.get("angular_velocity_penalty", episode_metrics.get("pitch_rate_penalty")),
-                episode_metrics.get("action_smoothness_penalty"),
-                episode_metrics.get("height_penalty"),
-            ]
-            if any(value is not None for value in values):
-                return float(sum(value or 0.0 for value in values))
-            return None
-
-        if metric_name == "net_reward_sum":
-            keys = (
-                "distance_reward",
-                "z_speed_reward",
-                "sparse_reward",
-                "tilt_penalty",
-                "joint_limit_penalty",
-                "angular_velocity_penalty",
-                "action_smoothness_penalty",
-                "height_penalty",
-                "terminal_event_reward",
-            )
-            values = [episode_metrics.get(key) for key in keys]
-            if episode_metrics.get("joint_limit_penalty") is None and episode_metrics.get("gait_reward") is not None:
-                values[4] = episode_metrics.get("gait_reward")
-            if any(value is not None for value in values):
-                return float(sum(value or 0.0 for value in values))
-            return None
-
-        if metric_name == "joint_limit_penalty":
-            value = episode_metrics.get("joint_limit_penalty")
-            if value is None:
-                value = episode_metrics.get("gait_reward")
-            if value is None:
-                return None
-            return float(value)
-
         if metric_name == "returns_mean":
             values = episode_metrics.get("returns")
             if values:
@@ -443,10 +385,8 @@ class Visualizer:
             ("episode_reward", "Episode Reward", "Reward", self.palette["cyan"]),
             ("forward_progress", "Forward Progress", "Distance", self.palette["orange"]),
             ("distance_reward", "Progress Reward", "Reward", self.palette["orange"]),
-            ("z_speed_reward", "Forward Speed Reward", "Reward", self.palette["teal"]),
-            ("sparse_reward", "Checkpoint Reward", "Reward", self.palette["yellow"]),
             ("locomotion_reward_scale", "Locomotion Scale", "Scale", self.palette["green"]),
-            ("joint_limit_penalty", "Joint Limit Penalty", "Penalty", self.palette["magenta"]),
+            ("terminal_event_reward", "Terminal Reward", "Reward", self.palette["red"]),
             ("returns_mean", "Returns Mean", "Value", self.palette["yellow"]),
         ]
 
@@ -477,11 +417,10 @@ class Visualizer:
             "Reward",
             [
                 ("reward_norm_mean", "Normalized Reward", self.palette["cyan"]),
-                ("positive_reward_sum", "Positive Reward Sum", self.palette["green"]),
-                ("distance_reward", "Progress", self.palette["orange"]),
-                ("z_speed_reward", "Forward Speed", self.palette["teal"]),
-                ("sparse_reward", "Checkpoint", self.palette["yellow"]),
                 ("episode_reward", "Episode Reward", self.palette["blue"]),
+                ("distance_reward", "Progress", self.palette["orange"]),
+                ("locomotion_reward", "Locomotion", self.palette["green"]),
+                ("terminal_event_reward", "Terminal", self.palette["red"]),
             ],
         )
         self._plot_grouped_series(
@@ -499,14 +438,13 @@ class Visualizer:
         self._plot_grouped_series(
             axes[2],
             metrics_data,
-            "Penalty Overview",
-            "Penalty",
+            "Movement",
+            "Value",
             [
-                ("penalty_sum", "Penalty Sum", self.palette["red"]),
-                ("tilt_penalty", "Tilt Penalty", self.palette["orange"]),
-                ("joint_limit_penalty", "Joint Limit", self.palette["magenta"]),
-                ("angular_velocity_penalty", "Angular Velocity", self.palette["blue"]),
-                ("action_smoothness_penalty", "Action Smoothness", self.palette["teal"]),
+                ("forward_progress", "Progress", self.palette["orange"]),
+                ("progress_delta", "Progress Delta", self.palette["yellow"]),
+                ("forward_speed", "Forward Speed", self.palette["teal"]),
+                ("cumulative_locomotion_reward", "Cumulative Locomotion", self.palette["green"]),
             ],
         )
         self._plot_grouped_series(
@@ -545,6 +483,7 @@ class Visualizer:
             [
                 ("done_reason_critical_tilt", "Critical Tilt", self.palette["red"]),
                 ("done_reason_joint_limit_timeout", "Joint Limit", self.palette["magenta"]),
+                ("done_reason_too_low", "Too Low", self.palette["cyan"]),
                 ("done_reason_too_high", "Too High", self.palette["yellow"]),
                 ("done_reason_max_steps", "Clean Episode", self.palette["green"]),
             ],
@@ -688,7 +627,7 @@ class Visualizer:
         plt.close()
 
 if __name__ == "__main__":
-    visualizer = Visualizer(start_epsilon=START_EPS, epsilon_decay=EPS_DECAY, epsilon_min=EPS_MIN, plot_interval=PLOT_INTERVAL, save_interval=SAVE_INTERVAL)
+    visualizer = Visualizer(plot_interval=PLOT_INTERVAL, save_interval=SAVE_INTERVAL)
     # On les json une seule fois
     states_path = os.path.join(visualizer.output_dir, "episodes_states.json")
     metrics_path = os.path.join(visualizer.output_dir, "metrics_history.json")

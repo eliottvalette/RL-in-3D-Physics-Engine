@@ -8,11 +8,9 @@ import numpy as np
 def reset_env_state(env):
     env.quadruped.reset()
     env.quadruped.prev_vertices = None
-    env.circles_passed.clear()
     env.prev_potential = None
     env.consecutive_steps_below_critical_height = 0
     env.consecutive_steps_above_critical_height = 0
-    env.prev_radius = None
 
 
 def sync_quadruped_state(env):

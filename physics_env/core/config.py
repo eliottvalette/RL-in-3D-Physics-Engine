@@ -17,7 +17,6 @@ RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
 GRAY = (128, 128, 128)
-DARK_GRAY = (64, 64, 64)
 
 # --- Physique ---
 # Convention d'unites:
@@ -29,12 +28,7 @@ GRAVITY = np.array([0, -9.81, 0])
 DT = 1 / PHYSICS_HZ
 PHYSICS_STEPS_PER_RENDER = max(1, int(round(PHYSICS_HZ / RENDER_FPS)))
 
-# --- Stabilisation dynamique ------------------------------------
-G_STAB = 0.6          # gain d’amortissement (0‑1)
-CONTACT_VERTICES_MAX = 32   # 4 lower‑legs × 8 sommets chacune
-
 # --- Constantes de collision ---
-RESTITUTION = 0.2    # Coefficient de restitution (0 = inélastique, 1 = parfaitement élastique)
 FRICTION = 1.0       # Adherence cible proche d'un contact caoutchouc / beton sec
 CONTACT_THRESHOLD_BASE = 0.05  # 0.05 unites ~= 1 cm
 CONTACT_THRESHOLD_MULTIPLIER = 1.5  # Multiplicateur pour le seuil dynamique
@@ -48,8 +42,6 @@ CONTACT_MANIFOLD_MIN_XZ_SPACING = 0.35
 # --- Limites de vitesse ---
 MAX_VELOCITY = 10.0
 MAX_ANGULAR_VELOCITY = 5.0
-MAX_IMPULSE = 5.0
-MAX_AVERAGE_IMPULSE = 2.0
 
 # --- Angles d'articulations ---
 SHOULDER_DELTA = 0.025
@@ -65,37 +57,17 @@ MOTOR_RESPONSE_DIFFICULTY_BOOST = 0.45
 MOTOR_BRAKE_DIFFICULTY_BOOST = 0.45
 MOTOR_DAMPING_DIFFICULTY_BOOST = 0.22
 
-# --- Contact / Friction ----------------------------------------------------
-# 0.02 unites/s ~= 4 mm/s avec l'echelle ci-dessus.
-SLIP_THRESHOLD = 0.02
-STATIC_FRICTION_CAP  = 50.0     # impulsion maximale transmise au quadruped
-TILT_DEADZONE = np.deg2rad(8.0)
-TILT_NO_REWARD_ANGLE = np.deg2rad(10.0)
-TILT_PENALTY_COEF = 0.12
+# --- Contraintes RL ----------------------------------------------------
 CRITICAL_TILT_ANGLE = np.deg2rad(20.0)
-MAX_CONSECUTIVE_CRITICAL_TILT_STEPS = 45
 JOINT_LIMIT_THRESHOLD = np.pi / 2 * 0.9
 MAX_CONSECUTIVE_JOINT_LIMIT_STEPS = 200
 TERMINAL_PENALTY_TOO_HIGH = -2.5
 TERMINAL_PENALTY_TOO_LOW = -2.5
 TERMINAL_PENALTY_CRITICAL_TILT = -2.0
 TERMINAL_PENALTY_JOINT_LIMIT_TIMEOUT = -1.5
-TERMINAL_BONUS_MAX_STEPS = 0.0
 PROGRESS_REWARD_COEF = 1.0
-PROGRESS_REWARD_STEP_SCALE = 0.03
-FORWARD_SPEED_REWARD_COEF = 0.0
-FORWARD_SPEED_SCALE = 0.75
-SPARSE_CHECKPOINT_REWARD = 0.0
-JOINT_LIMIT_PROGRESS_PENALTY_COEF = 0.0
-ANGULAR_VELOCITY_PENALTY_COEF = 0.0
-ACTION_SMOOTHNESS_PENALTY_COEF = 0.0
-HEIGHT_PENALTY = 0.0
 MIN_BODY_HEIGHT = 4.5
 MAX_BODY_HEIGHT = 5.5
-HEIGHT_REWARD_DECAY_MARGIN = 0.5
-STABILITY_BONUS = 0.0
-STABILITY_TILT_THRESHOLD = np.deg2rad(6.0)
-MAX_VALID_TILT_ANGLE = CRITICAL_TILT_ANGLE
 
 # ----- Debug Physics Simulation --------------------------------------
 DEBUG_CONTACT = False       
@@ -104,7 +76,6 @@ DEBUG_CONTACT = False
 DEBUG_RL_TRAIN = False
 DEBUG_RL_MODEL = False
 DEBUG_RL_AGENT = False
-DEBUG_RL_VIZ   = False
 
 # ----- RL Training Config --------------------------------------
 EPISODES  = 2_000
@@ -119,10 +90,6 @@ PPO_MINIBATCH_SIZE = 64
 PPO_TARGET_KL = 0.02
 EVAL_INTERVAL = 10
 EVAL_EPISODES = 1
-
-START_EPS = 0.5
-EPS_DECAY = 0,995
-EPS_MIN   = 0.01
 
 PLOT_INTERVAL = 30
 SAVE_INTERVAL = 30

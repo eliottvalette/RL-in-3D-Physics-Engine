@@ -14,7 +14,6 @@ from physics_env.core.config import (
     TERMINAL_PENALTY_JOINT_LIMIT_TIMEOUT,
     TERMINAL_PENALTY_TOO_HIGH,
     TERMINAL_PENALTY_TOO_LOW,
-    TILT_NO_REWARD_ANGLE,
 )
 from physics_env.envs.quadruped_env import QuadrupedEnv
 
@@ -74,7 +73,7 @@ class TerminalRewardsTest(unittest.TestCase):
         env.prev_potential = 0.0
         env.quadruped.position[2] = -0.02
         env.quadruped.orientation = env.quadruped._euler_to_quaternion(
-            np.array([0.0, 0.0, TILT_NO_REWARD_ANGLE + 0.05])
+            np.array([0.0, 0.0, np.deg2rad(10.0) + 0.05])
         )
         env.quadruped.sync_euler_from_orientation()
 
@@ -99,7 +98,6 @@ class TerminalRewardsTest(unittest.TestCase):
             _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
 
         self.assertTrue(done)
-        self.assertNotIn("failure_clawback", env.last_reward_components)
         self.assertAlmostEqual(reward, TERMINAL_PENALTY_CRITICAL_TILT, places=6)
 
     def test_joint_limit_timeout_is_terminal_and_does_not_pay_locomotion(self):
@@ -134,8 +132,7 @@ class TerminalRewardsTest(unittest.TestCase):
             PROGRESS_REWARD_COEF * 0.02,
             places=6,
         )
-        self.assertGreater(env.last_reward_components["forward_speed_signal"], 0.0)
-        self.assertEqual(env.last_reward_components["z_speed_reward"], 0.0)
+        self.assertAlmostEqual(env.last_reward_components["forward_speed"], 0.5, places=6)
         self.assertAlmostEqual(reward, env.last_reward_components["distance_reward"], places=6)
 
     def test_forward_speed_without_position_progress_does_not_pay(self):
@@ -149,8 +146,7 @@ class TerminalRewardsTest(unittest.TestCase):
 
         self.assertFalse(done)
         self.assertEqual(env.last_reward_components["distance_reward"], 0.0)
-        self.assertEqual(env.last_reward_components["z_speed_reward"], 0.0)
-        self.assertGreater(env.last_reward_components["forward_speed_signal"], 0.0)
+        self.assertAlmostEqual(env.last_reward_components["forward_speed"], 1.0, places=6)
         self.assertEqual(reward, 0.0)
 
     def test_backward_motion_gets_negative_progress_reward(self):
@@ -164,8 +160,7 @@ class TerminalRewardsTest(unittest.TestCase):
 
         self.assertFalse(done)
         self.assertLess(env.last_reward_components["distance_reward"], 0.0)
-        self.assertEqual(env.last_reward_components["sparse_reward"], 0.0)
-        self.assertEqual(env.last_reward_components["z_speed_reward"], 0.0)
+        self.assertAlmostEqual(env.last_reward_components["forward_speed"], -1.0, places=6)
         self.assertLess(reward, 0.0)
 
 

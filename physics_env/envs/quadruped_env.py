@@ -41,8 +41,6 @@ class QuadrupedEnv:
         "P - Afficher les sommets",
         "Échap - Quitter"
     ]
-    CIRCLE_RADII = [0.5, 0.75, 1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20]
-
     def __init__(self, rendering=True, headless=False, bench_mode=False):
         """Initialize the game, Pygame, and world objects."""
         pygame.init()
@@ -69,13 +67,8 @@ class QuadrupedEnv:
         self.rotation_speed = 0.02
         self.font = pygame.font.Font(None, 24)
 
-        self.circle_radii   = self.CIRCLE_RADII
-        self.circles_passed = set()         # stocke les rayons déjà comptés
-        self.prev_radius   = None     # distance horizontale au pas t‑1
         self.prev_potential = None
         self.cumulative_locomotion_reward = 0.0
-        self.rot_penalty_coef = 0.5
-        self.gait_reward_coef = 0.5
         self.consecutive_steps_below_critical_height = 0
         self.consecutive_steps_above_critical_height = 0
         self.consecutive_steps_critical_tilt = 0
@@ -98,36 +91,8 @@ class QuadrupedEnv:
         side_tilt = abs(np.arctan2(body_up_world[2], body_up_world[1]))
         return forward_tilt, side_tilt
 
-    def _compute_tilt_reward_scale(self, max_tilt):
-        if max_tilt <= STABILITY_TILT_THRESHOLD:
-            return 1.0
-        if max_tilt >= CRITICAL_TILT_ANGLE:
-            return 0.0
-
-        tilt_window = CRITICAL_TILT_ANGLE - STABILITY_TILT_THRESHOLD
-        if tilt_window <= 0.0:
-            return 0.0
-
-        return float(np.clip((CRITICAL_TILT_ANGLE - max_tilt) / tilt_window, 0.0, 1.0))
-
-    def _compute_height_reward_scale(self, body_height):
-        if MIN_BODY_HEIGHT <= body_height <= MAX_BODY_HEIGHT:
-            return 1.0
-
-        if body_height < MIN_BODY_HEIGHT:
-            overshoot = MIN_BODY_HEIGHT - body_height
-        else:
-            overshoot = body_height - MAX_BODY_HEIGHT
-
-        if HEIGHT_REWARD_DECAY_MARGIN <= 0.0:
-            return 0.0
-
-        return float(np.clip(1.0 - overshoot / HEIGHT_REWARD_DECAY_MARGIN, 0.0, 1.0))
-
     def reset_episode_state(self):
-        self.circles_passed.clear()
         self.prev_potential = None
-        self.prev_radius = None
         self.cumulative_locomotion_reward = 0.0
         self.prev_action.fill(0.0)
         self._reset_safety_counters()
@@ -297,19 +262,16 @@ class QuadrupedEnv:
             self.quadruped.steps_since_too_low = 0
             self.last_reward_components = {
                 "distance_reward": 0.0,
-                "z_speed_reward": 0.0,
-                "sparse_reward": 0.0,
-                "tilt_penalty": 0.0,
-                "gait_reward": 0.0,
-                "joint_limit_penalty": 0.0,
-                "angular_velocity_penalty": 0.0,
-                "action_smoothness_penalty": 0.0,
-                "pitch_rate_penalty": 0.0,
-                "height_penalty": 0.0,
-                "stability_bonus": 0.0,
+                "locomotion_reward": 0.0,
+                "cumulative_locomotion_reward": 0.0,
+                "forward_progress": 0.0,
+                "clipped_forward_progress": 0.0,
+                "progress_delta": 0.0,
+                "forward_speed": 0.0,
                 "terminal_event_reward": 0.0,
                 "tilt_reward_scale": 1.0,
                 "height_reward_scale": 1.0,
+                "raw_pose_scale": 1.0,
                 "locomotion_reward_scale": 1.0,
                 "forward_tilt_deg": 0.0,
                 "side_tilt_deg": 0.0,
@@ -332,41 +294,23 @@ class QuadrupedEnv:
         # ----------  a) progression avant signee --------------
         forward_progress = -float(self.quadruped.position[2])
         progress_delta = 0.0
-        normalized_delta = 0.0
         if self.prev_potential is None:
             distance_reward = 0.0
         else:
             progress_delta = forward_progress - self.prev_potential
-            normalized_delta = progress_delta / max(PROGRESS_REWARD_STEP_SCALE, 1e-6)
             distance_reward = PROGRESS_REWARD_COEF * float(progress_delta)
         self.prev_potential = forward_progress
-        self.prev_radius = forward_progress
 
-        # ----------  b) vitesse avant saturante sans vitesse cible imposee ---------
+        # ----------  b) metriques de mouvement et posture -------------------------
         forward_speed = -float(self.quadruped.velocity[2])
-        positive_speed = max(0.0, forward_speed)
-        forward_speed_signal = float(np.tanh(positive_speed / max(FORWARD_SPEED_SCALE, 1e-6)))
-        z_speed_reward = FORWARD_SPEED_REWARD_COEF * forward_speed_signal
 
-        # ----------  c) posture et qualite du mouvement ----------------------------
         forward_tilt, side_tilt = self._compute_body_tilt_angles()
         max_tilt = max(forward_tilt, side_tilt)
-        tilt_excess = max(0.0, max_tilt - TILT_DEADZONE)
-        normalized_tilt_excess = tilt_excess / max(TILT_DEADZONE, 1e-6)
-        tilt_penalty = -TILT_PENALTY_COEF * float(normalized_tilt_excess ** 2)
 
-        # ----------  d) checkpoints clairsemes, volontairement modestes ------------
-        sparse_reward = 0.0
-        for r in self.circle_radii:
-            if forward_progress >= r and r not in self.circles_passed:
-                sparse_reward += SPARSE_CHECKPOINT_REWARD
-                self.circles_passed.add(r)
-
-        # ----------  e) qualite de posture / contraintes internes ------------------
+        # ----------  c) contraintes terminales -------------------------------------
         body_height = float(self.quadruped.position[1])
         below_critical_height = body_height < MIN_BODY_HEIGHT
         above_critical_height = body_height > MAX_BODY_HEIGHT
-        height_penalty = HEIGHT_PENALTY if (below_critical_height or above_critical_height) else 0.0
 
         if below_critical_height:
             self.consecutive_steps_below_critical_height += 1
@@ -378,7 +322,7 @@ class QuadrupedEnv:
             self.consecutive_steps_below_critical_height = 0
             self.consecutive_steps_above_critical_height = 0
 
-        critically_tilted = max_tilt > MAX_VALID_TILT_ANGLE
+        critically_tilted = max_tilt > CRITICAL_TILT_ANGLE
         if critically_tilted:
             self.consecutive_steps_critical_tilt += 1
         else:
@@ -396,22 +340,11 @@ class QuadrupedEnv:
             self.consecutive_elbow_limit_steps + 1,
             0,
         )
-        joint_limit_progress = self._get_joint_limit_progress()
-        joint_limit_penalty = -JOINT_LIMIT_PROGRESS_PENALTY_COEF * float(np.mean(np.square(joint_limit_progress)))
-        gait_reward = joint_limit_penalty
 
-        angular_speed = float(np.linalg.norm(self.quadruped.angular_velocity))
-        normalized_angular_speed = min(angular_speed / max(MAX_ANGULAR_VELOCITY, 1e-6), 1.0)
-        angular_velocity_penalty = -ANGULAR_VELOCITY_PENALTY_COEF * float(normalized_angular_speed ** 2)
-
-        action_delta = current_action - self.prev_action
-        action_smoothness_penalty = -ACTION_SMOOTHNESS_PENALTY_COEF * float(np.mean(np.square(action_delta)))
-
-        tilt_reward_scale = 1.0 if max_tilt <= MAX_VALID_TILT_ANGLE else 0.0
+        tilt_reward_scale = 1.0 if max_tilt <= CRITICAL_TILT_ANGLE else 0.0
         height_reward_scale = 1.0 if MIN_BODY_HEIGHT <= body_height <= MAX_BODY_HEIGHT else 0.0
         raw_pose_scale = tilt_reward_scale * height_reward_scale
         locomotion_reward_scale = raw_pose_scale
-        stability_bonus = 0.0
 
         joint_limit_timeout = (
             int(self.consecutive_shoulder_limit_steps.max()) > MAX_CONSECUTIVE_JOINT_LIMIT_STEPS
@@ -427,7 +360,7 @@ class QuadrupedEnv:
         elif above_critical_height:
             done_reason = "too_high"
             terminal_event_reward = TERMINAL_PENALTY_TOO_HIGH
-        elif max_tilt > MAX_VALID_TILT_ANGLE:
+        elif max_tilt > CRITICAL_TILT_ANGLE:
             done_reason = "critical_tilt"
             terminal_event_reward = TERMINAL_PENALTY_CRITICAL_TILT
         elif joint_limit_timeout:
@@ -455,22 +388,10 @@ class QuadrupedEnv:
             "distance_reward": float(distance_reward),
             "locomotion_reward": float(locomotion_reward),
             "cumulative_locomotion_reward": float(self.cumulative_locomotion_reward),
-            "z_speed_reward": float(z_speed_reward),
             "forward_progress": float(forward_progress),
             "clipped_forward_progress": float(max(0.0, forward_progress)),
             "progress_delta": float(progress_delta),
-            "normalized_progress_delta": float(normalized_delta),
             "forward_speed": float(forward_speed),
-            "forward_speed_signal": float(forward_speed_signal),
-            "sparse_reward": float(sparse_reward),
-            "tilt_penalty": float(tilt_penalty),
-            "gait_reward": float(gait_reward),
-            "joint_limit_penalty": float(joint_limit_penalty),
-            "angular_velocity_penalty": float(angular_velocity_penalty),
-            "action_smoothness_penalty": float(action_smoothness_penalty),
-            "pitch_rate_penalty": float(angular_velocity_penalty),
-            "height_penalty": float(height_penalty),
-            "stability_bonus": float(stability_bonus),
             "terminal_event_reward": float(terminal_event_reward),
             "tilt_reward_scale": float(tilt_reward_scale),
             "height_reward_scale": float(height_reward_scale),
@@ -492,7 +413,6 @@ class QuadrupedEnv:
         self.screen.fill(BLACK)
         self.ground.draw_premium(self.screen, self.camera)
         self.ground.draw_axes(self.screen, self.camera)
-        self.draw_checkpoint_circles()
         self.quadruped.draw_premium(self.screen, self.camera)
         self.render_ui(reward, done, step_time, state_value)
         if not self.headless:
@@ -526,7 +446,6 @@ class QuadrupedEnv:
         )
         reward_text = f"Récompense: {reward:.2f}"
         done_text = f"Terminé ? {done}"
-        score_text = f"Score cercles: {len(self.circles_passed)}"
         step_time_text = f"Step time: {(step_time*1000):.6f}ms"
         surfaces = [
             self.font.render(pos_text, True, WHITE),
@@ -537,7 +456,6 @@ class QuadrupedEnv:
             self.font.render(elbow_text, True, WHITE),
             self.font.render(reward_text, True, WHITE),
             self.font.render(done_text, True, WHITE),
-            self.font.render(score_text, True, WHITE),
             self.font.render(step_time_text, True, WHITE),
         ]
         for i, surf in enumerate(surfaces):
@@ -552,20 +470,6 @@ class QuadrupedEnv:
             state_value_text = f"State value: {state_value:.2f}"
             state_value_surface = self.font.render(state_value_text, True, WHITE)
             self.screen.blit(state_value_surface, (WINDOW_WIDTH - 200, 10))
-
-    def draw_checkpoint_circles(self):
-        """Dessine les cercles de récompense au sol."""
-        segments = 36
-        for r in self.circle_radii:
-            pts = []
-            for theta in np.linspace(0, 2*np.pi, segments, endpoint=False):
-                world_pt = np.array([r*np.cos(theta), 0.0, r*np.sin(theta)])
-                proj = self.camera.project_3d_to_2d(world_pt)
-                if proj:                 # point visible
-                    pts.append(proj[:2])
-            if len(pts) > 1:
-                color = (0, 255, 0) if r in self.circles_passed else (100, 100, 100)
-                pygame.draw.lines(self.screen, color, True, pts, 1)
 
 if __name__ == "__main__":
     import cProfile

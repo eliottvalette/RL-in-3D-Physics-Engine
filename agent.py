@@ -278,7 +278,3 @@ class QuadrupedAgent:
         }
         self.rollout_buffer.clear()
         return metrics
-
-    def train_model(self, epsilon=None, batch_size=32):
-        del epsilon, batch_size
-        return None

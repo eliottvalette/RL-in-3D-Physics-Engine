@@ -155,9 +155,6 @@ def main_training_loop(agent: QuadrupedAgent, episodes: int, rendering: bool, re
     data_collector = DataCollector(
         save_interval=SAVE_INTERVAL,
         plot_interval=PLOT_INTERVAL,
-        start_epsilon=0.0,
-        epsilon_decay=1.0,
-        epsilon_min=0.0,
     )
 
     episode = 0
