@@ -32,7 +32,11 @@ def save_models(agent, episode, models_dir="saved_models"):
     latest_path = f"{models_dir}/quadruped_agent.pth"
 
     torch.save(checkpoint, epoch_path)
-    torch.save(checkpoint, latest_path)
+    try:
+        with open(latest_path, "xb") as latest_file:
+            torch.save(checkpoint, latest_file)
+    except FileExistsError:
+        print(f"Latest model already exists, leaving untouched: {latest_path}")
     print("Models saved successfully!")
 
 def save_metrics(metrics_history, output_dir):
