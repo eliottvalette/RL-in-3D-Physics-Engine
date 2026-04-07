@@ -406,7 +406,8 @@ class QuadrupedEnv:
 
         tilt_reward_scale = self._compute_tilt_reward_scale(max_tilt)
         height_reward_scale = self._compute_height_reward_scale(body_height)
-        locomotion_reward_scale = tilt_reward_scale * height_reward_scale
+        raw_pose_scale = tilt_reward_scale * height_reward_scale
+        locomotion_reward_scale = 0.35 + 0.65 * raw_pose_scale
 
         # Les rewards locomotion sont gates par la qualite de posture, tandis que les
         # penalties structurelles restent faibles mais explicites.
@@ -469,6 +470,7 @@ class QuadrupedEnv:
             "terminal_event_reward": float(terminal_event_reward),
             "tilt_reward_scale": float(tilt_reward_scale),
             "height_reward_scale": float(height_reward_scale),
+            "raw_pose_scale": float(raw_pose_scale),
             "locomotion_reward_scale": float(locomotion_reward_scale),
             "forward_tilt_deg": float(np.degrees(forward_tilt)),
             "side_tilt_deg": float(np.degrees(side_tilt)),
