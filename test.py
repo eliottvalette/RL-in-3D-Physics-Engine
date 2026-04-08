@@ -16,6 +16,7 @@ def test_agent(agent: QuadrupedAgent, env: QuadrupedEnv):
 
     #### Boucle principale du jeu ####
     running = True
+    steps_count = 0
     while running:
         # Handle pygame events for camera control
         running = env.handle_events()
@@ -26,6 +27,7 @@ def test_agent(agent: QuadrupedAgent, env: QuadrupedEnv):
 
         if keys[K_SPACE]:
             env.reset_episode()
+            steps_count = 0
         
         # Récupération de l'état actuel
         state = env.get_state()
@@ -39,12 +41,15 @@ def test_agent(agent: QuadrupedAgent, env: QuadrupedEnv):
 
         # Exécuter l'action dans l'environnement avec les actions de caméra
         _, reward, done, step_time = env.step(shoulders, elbows, camera_actions)
+        steps_count += 1
         
         # Rendu graphique
         env.render(reward, done, step_time, state_value)
 
         if done:
+            print(f"done: {done}, steps: {steps_count}, reason: {env.last_done_reason}")
             env.reset_episode()
+            steps_count = 0
 
 
 def build_test_agent():
