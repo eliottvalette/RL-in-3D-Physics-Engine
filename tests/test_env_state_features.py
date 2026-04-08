@@ -1,7 +1,12 @@
 import unittest
 import numpy as np
 
-from physics_env.core.config import MAX_CONSECUTIVE_JOINT_LIMIT_STEPS, STATE_SIZE
+from physics_env.core.config import (
+    MAX_CONSECUTIVE_JOINT_LIMIT_STEPS,
+    RESET_JOINT_ANGLE_JITTER,
+    RESET_VERTICAL_AXIS_ROTATION_JITTER,
+    STATE_SIZE,
+)
 from physics_env.envs.quadruped_env import QuadrupedEnv
 from physics_env.quadruped.quadruped import QUADRUPED_TOTAL_MASS, Quadruped
 from physics_env.quadruped.quadruped_points import create_quadruped_vertices, get_quadruped_vertices
@@ -73,6 +78,22 @@ class EnvStateFeaturesTest(unittest.TestCase):
         self.assertAlmostEqual(quadruped.mass, QUADRUPED_TOTAL_MASS, places=6)
         np.testing.assert_allclose(part_densities, np.full_like(part_densities, part_densities[0]))
         self.assertGreater(quadruped.part_masses[0], quadruped.part_masses[1])
+
+    def test_pose_jitter_reset_randomizes_joints_without_velocity_kick(self):
+        env = QuadrupedEnv(rendering=False, headless=True, bench_mode=True)
+        env.reset_episode(pose_jitter=True)
+
+        np.testing.assert_allclose(env.quadruped.position, env.quadruped.initial_position)
+        np.testing.assert_allclose(env.quadruped.velocity, env.quadruped.initial_velocity)
+        np.testing.assert_allclose(env.quadruped.angular_velocity, env.quadruped.initial_angular_velocity)
+        np.testing.assert_allclose(env.quadruped.shoulder_velocities, np.zeros(4))
+        np.testing.assert_allclose(env.quadruped.elbow_velocities, np.zeros(4))
+
+        self.assertLessEqual(float(np.abs(env.quadruped.shoulder_angles).max()), RESET_JOINT_ANGLE_JITTER)
+        self.assertLessEqual(float(np.abs(env.quadruped.elbow_angles).max()), RESET_JOINT_ANGLE_JITTER)
+        self.assertAlmostEqual(float(env.quadruped.rotation[0]), 0.0, places=6)
+        self.assertLessEqual(abs(float(env.quadruped.rotation[1])), RESET_VERTICAL_AXIS_ROTATION_JITTER)
+        self.assertAlmostEqual(float(env.quadruped.rotation[2]), 0.0, places=6)
 
 
 if __name__ == "__main__":

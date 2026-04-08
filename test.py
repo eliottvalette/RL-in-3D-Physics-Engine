@@ -12,7 +12,7 @@ def test_agent(agent: QuadrupedAgent, env: QuadrupedEnv):
     L'Agent Agir.
     """
 
-    env.reset_episode()
+    env.reset_episode(pose_jitter=True)
 
     #### Boucle principale du jeu ####
     running = True
@@ -26,7 +26,7 @@ def test_agent(agent: QuadrupedAgent, env: QuadrupedEnv):
         camera_actions = env.handle_camera_controls(keys)
 
         if keys[K_SPACE]:
-            env.reset_episode()
+            env.reset_episode(pose_jitter=True)
             steps_count = 0
         
         # Récupération de l'état actuel
@@ -48,7 +48,7 @@ def test_agent(agent: QuadrupedAgent, env: QuadrupedEnv):
 
         if done:
             print(f"done: {done}, steps: {steps_count}, reason: {env.last_done_reason}")
-            env.reset_episode()
+            env.reset_episode(pose_jitter=True)
             steps_count = 0
 
 

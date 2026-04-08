@@ -103,9 +103,13 @@ class QuadrupedEnv:
         self.quadruped.too_low = False
         self.quadruped.steps_since_too_low = 0
 
-    def reset_episode(self, randomize=False):
+    def reset_episode(self, randomize=False, pose_jitter=False):
+        if randomize and pose_jitter:
+            raise ValueError("reset_episode cannot use randomize=True and pose_jitter=True at the same time")
         if randomize:
             self.quadruped.reset_random()
+        elif pose_jitter:
+            self.quadruped.reset_pose_jitter()
         else:
             self.quadruped.reset()
         self.reset_episode_state()
@@ -249,7 +253,7 @@ class QuadrupedEnv:
         if reset_actions[0]:
             self.reset_episode(randomize=True)
         if reset_actions[1]:
-            self.reset_episode(randomize=False)
+            self.reset_episode(pose_jitter=True)
 
         # Update quadruped
         update_quadruped(self.quadruped)

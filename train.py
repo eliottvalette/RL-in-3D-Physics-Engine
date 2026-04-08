@@ -62,7 +62,7 @@ def _aggregate_metric_dicts(metric_dicts):
 
 
 def run_episode(env: QuadrupedEnv, agent: QuadrupedAgent, rendering: bool, episode: int, render_every: int, data_collector: DataCollector):
-    env.reset_episode()
+    env.reset_episode(pose_jitter=True)
     event_flags = _new_event_flags()
     episode_reward = 0.0
     locomotion_scales = []
@@ -118,7 +118,7 @@ def run_episode(env: QuadrupedEnv, agent: QuadrupedAgent, rendering: bool, episo
 
 
 def run_evaluation_episode(agent: QuadrupedAgent, env: QuadrupedEnv):
-    env.reset_episode()
+    env.reset_episode(pose_jitter=True)
     event_flags = _new_event_flags()
     episode_reward = 0.0
     locomotion_scales = []

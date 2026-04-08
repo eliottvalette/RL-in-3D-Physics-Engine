@@ -130,6 +130,29 @@ class Quadruped:
         self.rotated_vertices = self.get_vertices()
         self.prev_local_transformed_vertices = self.local_transformed_vertices.copy()
 
+    def reset_pose_jitter(self):
+        self.reset()
+        self.rotation[1] += np.random.uniform(
+            -RESET_VERTICAL_AXIS_ROTATION_JITTER,
+            RESET_VERTICAL_AXIS_ROTATION_JITTER,
+        )
+        self.orientation = self._euler_to_quaternion(self.rotation)
+        self.shoulder_angles = np.random.uniform(
+            -RESET_JOINT_ANGLE_JITTER,
+            RESET_JOINT_ANGLE_JITTER,
+            size=4,
+        ).astype(np.float64)
+        self.elbow_angles = np.random.uniform(
+            -RESET_JOINT_ANGLE_JITTER,
+            RESET_JOINT_ANGLE_JITTER,
+            size=4,
+        ).astype(np.float64)
+        self.shoulder_velocities = self.initial_shoulder_velocities.copy()
+        self.elbow_velocities = self.initial_elbow_velocities.copy()
+        self._needs_update = True
+        self.rotated_vertices = self.get_vertices()
+        self.prev_local_transformed_vertices = self.local_transformed_vertices.copy()
+
     def get_rotation_matrix(self):
         w, x, y, z = _quat_normalize(self.orientation)
         return np.array([

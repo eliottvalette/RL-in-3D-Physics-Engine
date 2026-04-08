@@ -28,7 +28,7 @@ TEST_RESET_SCENARIO = "env_reset"
 POLICY_INITIAL_SCENARIOS = {
     TEST_RESET_SCENARIO: {
         "category": "learned_policy",
-        "description": "Default QuadrupedEnv.reset_episode() state used by test.py.",
+        "description": "QuadrupedEnv.reset_episode(pose_jitter=True) state used by test.py.",
     }
 }
 
@@ -157,7 +157,7 @@ def run_policy_bench(
 
     try:
         if initial_scenario == TEST_RESET_SCENARIO:
-            env.reset_episode()
+            env.reset_episode(pose_jitter=True)
         else:
             scenario.reset(env)
             env.reset_episode_state()

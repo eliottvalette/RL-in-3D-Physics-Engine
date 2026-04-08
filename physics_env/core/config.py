@@ -57,6 +57,10 @@ MOTOR_RESPONSE_DIFFICULTY_BOOST = 0.45
 MOTOR_BRAKE_DIFFICULTY_BOOST = 0.45
 MOTOR_DAMPING_DIFFICULTY_BOOST = 0.22
 
+# --- Reset pose randomization --------------------------------------
+RESET_JOINT_ANGLE_JITTER = np.deg2rad(45.0)
+RESET_VERTICAL_AXIS_ROTATION_JITTER = np.deg2rad(9.0)
+
 # --- Contraintes RL ----------------------------------------------------
 CRITICAL_TILT_ANGLE = np.deg2rad(20.0)
 JOINT_LIMIT_THRESHOLD = np.pi / 2 * 0.9
