@@ -255,13 +255,23 @@ For an upper leg, the local transform is a shoulder rotation around the leg shou
 
 ### 4.4 Mass, Center Of Mass, And Inertia
 
-Current part masses are:
+Part masses are derived from a single uniform density instead of being stored as independent body/leg constants. The current total mass is preserved at $5.0$ kg, then distributed by cuboid volume:
 
-| Part | Mass |
-|---|---:|
-| Body | $3.0$ kg |
-| Upper leg | $0.35$ kg each |
-| Lower leg | $0.15$ kg each |
+```math
+V_i = d_{x,i}d_{y,i}d_{z,i},
+\qquad
+\rho = \frac{M_{\mathrm{quad}}}{\sum_i V_i},
+\qquad
+m_i = \rho V_i.
+```
+
+With the current geometry this gives:
+
+| Part | Volume | Derived mass |
+|---|---:|---:|
+| Body | $24.00$ unit$^3$ | $3.90625$ kg |
+| Upper leg | $0.96$ unit$^3$ each | $0.15625$ kg each |
+| Lower leg | $0.72$ unit$^3$ each | $0.11719$ kg each |
 
 The local center of mass is recomputed from the transformed part centers:
 

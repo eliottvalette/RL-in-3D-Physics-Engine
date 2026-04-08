@@ -6,10 +6,11 @@ from ..rendering.camera import Camera3D
 import copy
 import math
 
-# --- MASSES (kg) ---------------------------------------------------
-BODY_MASS        = 3.0        # tronc
-UPPER_LEG_MASS   = 0.35       # ×4
-LOWER_LEG_MASS   = 0.15       # ×4
+# --- Mass model ---------------------------------------------------
+# The total mass is preserved from the previous hand-tuned distribution:
+# 3.0 kg body + 4 * (0.35 kg upper leg + 0.15 kg lower leg) = 5.0 kg.
+# Per-part masses are derived from volume with a uniform density.
+QUADRUPED_TOTAL_MASS = 5.0
 
 WINDOW_WIDTH = 1500
 WINDOW_HEIGHT = 800
@@ -77,10 +78,11 @@ class Quadruped:
         self.local_transformed_vertices = None
         self.part_local_rotations = []
         self.part_dimensions = self._compute_part_dimensions()
+        self.part_masses, self.mass_density = self._compute_uniform_density_masses(self.part_dimensions)
         self.local_center_of_mass = np.zeros(3, dtype=np.float64)
         
         # --- masse & inertie réalistes --------------------------
-        self.mass = BODY_MASS + 4 * (UPPER_LEG_MASS + LOWER_LEG_MASS)
+        self.mass = float(self.part_masses.sum())
         self.I_body = np.eye(3, dtype=np.float64)
         self.rotated_vertices = self.get_vertices()
         self.prev_local_transformed_vertices = self.local_transformed_vertices.copy()
@@ -235,6 +237,16 @@ class Quadruped:
             dimensions.append(maxs - mins)
         return dimensions
 
+    @staticmethod
+    def _compute_uniform_density_masses(part_dimensions):
+        part_volumes = np.array([float(np.prod(dimensions)) for dimensions in part_dimensions], dtype=np.float64)
+        total_volume = float(part_volumes.sum())
+        if total_volume <= 1e-12:
+            raise ValueError("Quadruped geometry has zero volume; cannot derive mass from density.")
+
+        mass_density = QUADRUPED_TOTAL_MASS / total_volume
+        return part_volumes * mass_density, mass_density
+
     def _build_local_geometry(self):
         cos_sh = np.cos(self.shoulder_angles)
         sin_sh = np.sin(self.shoulder_angles)
@@ -289,13 +301,13 @@ class Quadruped:
         return result, part_rotations
 
     def _update_mass_properties(self, local_vertices, part_rotations):
-        masses = [BODY_MASS] + [UPPER_LEG_MASS] * 4 + [LOWER_LEG_MASS] * 4
+        masses = self.part_masses
         part_centers = []
         for part_idx in range(len(local_vertices) // 8):
             part_vertices = local_vertices[part_idx * 8:(part_idx + 1) * 8]
             part_centers.append(part_vertices.mean(axis=0))
 
-        weighted_sum = sum(mass * center for mass, center in zip(masses, part_centers))
+        weighted_sum = np.sum([mass * center for mass, center in zip(masses, part_centers)], axis=0)
         local_center_of_mass = weighted_sum / self.mass
 
         inertia_body = np.zeros((3, 3), dtype=np.float64)

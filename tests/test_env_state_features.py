@@ -3,7 +3,7 @@ import numpy as np
 
 from physics_env.core.config import MAX_CONSECUTIVE_JOINT_LIMIT_STEPS, STATE_SIZE
 from physics_env.envs.quadruped_env import QuadrupedEnv
-from physics_env.quadruped.quadruped import Quadruped
+from physics_env.quadruped.quadruped import QUADRUPED_TOTAL_MASS, Quadruped
 from physics_env.quadruped.quadruped_points import create_quadruped_vertices, get_quadruped_vertices
 
 
@@ -58,6 +58,21 @@ class EnvStateFeaturesTest(unittest.TestCase):
 
         self.assertAlmostEqual(first_leg_min_y, -3.0, places=6)
         self.assertAlmostEqual(first_leg_max_y, 10.0, places=6)
+
+    def test_part_masses_are_derived_from_uniform_density(self):
+        vertices_dict = create_quadruped_vertices()
+        quadruped = Quadruped(
+            position=np.array([0.0, 5.5, 0.0], dtype=np.float64),
+            vertices=get_quadruped_vertices(),
+            vertices_dict=vertices_dict,
+        )
+
+        part_volumes = np.array([float(np.prod(dimensions)) for dimensions in quadruped.part_dimensions])
+        part_densities = quadruped.part_masses / part_volumes
+
+        self.assertAlmostEqual(quadruped.mass, QUADRUPED_TOTAL_MASS, places=6)
+        np.testing.assert_allclose(part_densities, np.full_like(part_densities, part_densities[0]))
+        self.assertGreater(quadruped.part_masses[0], quadruped.part_masses[1])
 
 
 if __name__ == "__main__":
