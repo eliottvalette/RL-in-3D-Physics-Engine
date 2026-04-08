@@ -72,6 +72,7 @@ class Quadruped:
         self.initial_elbow_velocities = self.elbow_velocities.copy()
         self.prev_vertices = None
         self.prev_local_transformed_vertices = None
+        self.last_local_articulation_velocities = np.zeros((len(self.vertices), 3), dtype=np.float64)
         self.active_contact_indices = np.empty(0, dtype=np.int64)
         self._needs_update = True
         self.rotated_vertices = None
@@ -107,6 +108,7 @@ class Quadruped:
         self.elbow_velocities = self.initial_elbow_velocities.copy()
         self.prev_vertices = None
         self.prev_local_transformed_vertices = None
+        self.last_local_articulation_velocities = np.zeros((len(self.vertices), 3), dtype=np.float64)
         self.active_contact_indices = np.empty(0, dtype=np.int64)
         self._needs_update = True
         self.rotated_vertices = self.get_vertices()
@@ -125,6 +127,7 @@ class Quadruped:
         self.elbow_velocities = self.initial_elbow_velocities.copy()
         self.prev_vertices = None
         self.prev_local_transformed_vertices = None
+        self.last_local_articulation_velocities = np.zeros((len(self.vertices), 3), dtype=np.float64)
         self.active_contact_indices = np.empty(0, dtype=np.int64)
         self._needs_update = True
         self.rotated_vertices = self.get_vertices()
@@ -149,6 +152,7 @@ class Quadruped:
         ).astype(np.float64)
         self.shoulder_velocities = self.initial_shoulder_velocities.copy()
         self.elbow_velocities = self.initial_elbow_velocities.copy()
+        self.last_local_articulation_velocities = np.zeros((len(self.vertices), 3), dtype=np.float64)
         self._needs_update = True
         self.rotated_vertices = self.get_vertices()
         self.prev_local_transformed_vertices = self.local_transformed_vertices.copy()
@@ -372,6 +376,78 @@ class Quadruped:
     def get_vertices_dict(self):
         return self.vertices_dict
 
+    def get_body_frame_vector(self, world_vector):
+        return self.get_rotation_matrix().T @ np.asarray(world_vector, dtype=np.float64)
+
+    def get_foot_centers_local(self):
+        if self.local_transformed_vertices is None:
+            self._needs_update = True
+            self.get_vertices()
+
+        foot_centers = np.empty((4, 3), dtype=np.float64)
+        for leg_idx in range(4):
+            lower_start = (5 + leg_idx) * 8
+            lower_leg_vertices = self.local_transformed_vertices[lower_start : lower_start + 8]
+            foot_centers[leg_idx] = lower_leg_vertices[:4].mean(axis=0)
+        return foot_centers
+
+    def get_foot_centers_world(self):
+        self.get_vertices()
+
+        foot_centers = np.empty((4, 3), dtype=np.float64)
+        for leg_idx in range(4):
+            lower_start = (5 + leg_idx) * 8
+            lower_leg_vertices = self.rotated_vertices[lower_start : lower_start + 8]
+            foot_centers[leg_idx] = lower_leg_vertices[:4].mean(axis=0)
+        return foot_centers
+
+    def get_foot_center_velocities_local(self):
+        foot_velocities = np.empty((4, 3), dtype=np.float64)
+        for leg_idx in range(4):
+            lower_start = (5 + leg_idx) * 8
+            lower_leg_velocities = self.last_local_articulation_velocities[lower_start : lower_start + 8]
+            foot_velocities[leg_idx] = lower_leg_velocities[:4].mean(axis=0)
+        return foot_velocities
+
+    def get_state_components(self):
+        self.get_vertices()
+
+        gravity_norm = float(np.linalg.norm(GRAVITY))
+        gravity_direction_world = GRAVITY / gravity_norm if gravity_norm > 1e-12 else np.array([0.0, -1.0, 0.0], dtype=np.float64)
+        task_forward_world = np.array([0.0, 0.0, -1.0], dtype=np.float64)
+        center_of_mass_velocity_world = self.get_center_of_mass_velocity()
+        task_frame_velocity = np.array(
+            [center_of_mass_velocity_world[0], center_of_mass_velocity_world[1], -center_of_mass_velocity_world[2]],
+            dtype=np.float64,
+        )
+        joint_limit_fraction = np.concatenate(
+            [
+                np.abs(self.shoulder_angles) / (math.pi / 2.0),
+                np.abs(self.elbow_angles) / (math.pi / 2.0),
+            ],
+            dtype=np.float64,
+        )
+        foot_centers_world = self.get_foot_centers_world()
+        foot_heights_world = foot_centers_world[:, 1]
+
+        return {
+            "body_height": np.array([self.position[1]], dtype=np.float32),
+            "body_height_error": np.array([self.position[1] - 0.5 * (MIN_BODY_HEIGHT + MAX_BODY_HEIGHT)], dtype=np.float32),
+            "linear_velocity_body": self.get_body_frame_vector(center_of_mass_velocity_world).astype(np.float32),
+            "linear_velocity_task": task_frame_velocity.astype(np.float32),
+            "angular_velocity_body": self.get_body_frame_vector(self.angular_velocity).astype(np.float32),
+            "gravity_body": self.get_body_frame_vector(gravity_direction_world).astype(np.float32),
+            "task_forward_body": self.get_body_frame_vector(task_forward_world).astype(np.float32),
+            "shoulder_angles": self.shoulder_angles.astype(np.float32),
+            "elbow_angles": self.elbow_angles.astype(np.float32),
+            "shoulder_velocities": self.shoulder_velocities.astype(np.float32),
+            "elbow_velocities": self.elbow_velocities.astype(np.float32),
+            "joint_limit_fraction": np.clip(joint_limit_fraction, 0.0, 1.0).astype(np.float32),
+            "foot_positions_body": self.get_foot_centers_local().astype(np.float32).reshape(-1),
+            "foot_velocities_body": self.get_foot_center_velocities_local().astype(np.float32).reshape(-1),
+            "foot_heights_world": foot_heights_world.astype(np.float32),
+        }
+
     def set_shoulder_angle(self, leg_index, angle):
         capped_angle = max(-math.pi/2, min(math.pi/2, angle))
         self.shoulder_angles[leg_index] = capped_angle
@@ -434,69 +510,8 @@ class Quadruped:
         )
     
     def get_state(self):
-        """
-        Retourne l'état étendu du quadruped.
-        
-        """
-        # infos de base
-        base = np.concatenate([
-            self.position,
-            self.velocity,
-            self.rotation,
-            self.shoulder_angles,
-            self.shoulder_velocities,
-            self.elbow_angles,
-            self.elbow_velocities
-        ])
-
-        # 1. Utiliser les vertices déjà calculés
-        vertices = self.rotated_vertices 
-        
-        # 2. Les min/max X Y Z du Body
-        body_vertices = vertices[0:8]
-        body_xs = [v[0] for v in body_vertices]
-        body_ys = [v[1] for v in body_vertices]
-        body_zs = [v[2] for v in body_vertices]
-        body_min_x, body_max_x = min(body_xs), max(body_xs)
-        body_min_y, body_max_y = min(body_ys), max(body_ys)
-        body_min_z, body_max_z = min(body_zs), max(body_zs)
-
-        body_limits = np.array([body_min_x, body_max_x, body_min_y, body_max_y, body_min_z, body_max_z])
-
-        # 3. min/max Y pour chaque patte (FR, FL, BR, BL)
-        min_max_y = []
-        for leg_idx in range(4):
-            upper_start = (1 + leg_idx) * 8        # bloc upper‑leg
-            lower_start = (5 + leg_idx) * 8        # bloc lower‑leg
-
-            leg_vertices = np.concatenate(
-                [
-                    vertices[upper_start : upper_start + 8],
-                    vertices[lower_start : lower_start + 8],
-                ],
-                axis=0,
-            )
-            ys = [v[1] for v in leg_vertices]
-            min_max_y.extend([min(ys), max(ys)])
-        
-        # 4. est-ce que les angles sont capés ? pour chaque angle, un vecteur de taille 2, [a, b], a = 1 si l'angle est capé à pi/2, 0 sinon, b = 1 si l'angle est capé à -pi/2, 0 sinon
-        cap_shoulder = []
-        cap_elbow = []
-        for angle in self.shoulder_angles:
-            cap_shoulder.append([1 if angle >= math.pi/2 * 0.9 else 0, 1 if angle <= -math.pi/2 * 0.9 else 0])
-        for angle in self.elbow_angles:
-            cap_elbow.append([1 if angle >= math.pi/2 * 0.9 else 0, 1 if angle <= -math.pi/2 * 0.9 else 0])
-        cap_shoulder = np.array(cap_shoulder).flatten()
-        cap_elbow = np.array(cap_elbow).flatten()
-
-        # Est-ce que le quadruped est dans les danger zones ?
-        too_high = np.array([self.too_high], dtype=np.float32)
-        too_low = np.array([self.too_low], dtype=np.float32)
-        steps_since_too_high = np.array([self.steps_since_too_high / 50], dtype=np.float32)
-        steps_since_too_low = np.array([self.steps_since_too_low / 20], dtype=np.float32)
-
-        # 5. état final
-        state = np.concatenate([base, body_limits, np.array(min_max_y, dtype=np.float32), cap_shoulder, cap_elbow, too_high, too_low, steps_since_too_high, steps_since_too_low])
+        components = self.get_state_components()
+        state = np.concatenate(list(components.values()), dtype=np.float32)
         return state.tolist()
 
     def draw(self, screen: pygame.Surface, camera: Camera3D):

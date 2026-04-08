@@ -129,20 +129,20 @@ The quadruped environment is not built on MuJoCo, Bullet, or Isaac Gym. It uses 
 The environment observation is:
 
 ```math
-\mathbf{s}_t \in \mathbb{R}^{75}.
+\mathbf{s}_t \in \mathbb{R}^{102}.
 ```
 
-It extends the quadruped's internal 59-dimensional state with joint-limit counters and previous action:
+It is now organized around body-frame dynamics, articulated joint state, foot geometry, and explicit contact/support memory:
 
 | Block | Dim | Content |
 |---|---:|---|
-| Base kinematics | 25 | position, linear velocity, Euler rotation, shoulder angles/velocities, elbow angles/velocities |
-| Body bounds | 6 | body vertex $\min/\max$ along $(x,y,z)$ |
-| Per-leg height | 8 | $\min/\max\ y$ for each full leg |
-| Joint cap flags | 16 | binary flags near $\pm \frac{\pi}{2}$ for shoulders and elbows |
-| Safety flags | 4 | `too_high`, `too_low`, normalized steps since each flag |
+| Body / task frame | 17 | body height, height error, center-of-mass linear velocity in body frame, task-frame linear velocity, angular velocity in body frame, gravity direction in body frame, task-forward direction in body frame |
+| Joint state | 24 | shoulder angles, elbow angles, shoulder velocities, elbow velocities, normalized joint-limit fractions |
+| Foot geometry / kinematics | 28 | body-frame foot centers, body-frame foot velocities, world foot heights for the 4 lower legs |
 | Joint-limit progress | 8 | shoulder/elbow timeout counters normalized by the timeout horizon |
 | Previous action | 8 | previous shoulder/elbow action vector |
+| Per-foot contact memory | 8 | current lower-leg contacts plus normalized steps since each foot last touched ground |
+| Contact / support summary | 9 | normalized total contact count, normalized steps since any contact, recent-contact flags, grounded-leg count, support centroid in body frame, COM-to-support offset |
 
 ### 3.3 Action Space
 
@@ -169,17 +169,20 @@ d_t = -p_{t,z},
 \Delta d_t = d_t - d_{t-1}.
 ```
 
-The current reward contract is:
+The current reward contract pays forward progress only when the robot has had recent ground contact:
 
 ```math
 r_t =
 \begin{cases}
-\kappa\,\Delta d_t, & \text{if posture is valid},\\
+\kappa\,\Delta d_t - \alpha_{\omega}\|\omega_t\|, & \text{if posture is valid and recently grounded},\\
+-\alpha_{\omega}\|\omega_t\|, & \text{if posture is valid but not recently grounded},\\
 p_{\mathrm{terminal}}, & \text{if posture is invalid},
 \end{cases}
 \qquad
 \kappa = 1.0.
 ```
+
+The contact gate uses a short grace window after the last contact. This prevents the agent from earning progress reward during long ballistic phases while still tolerating brief contact gaps.
 
 The active terminal failures are:
 
@@ -189,6 +192,7 @@ The active terminal failures are:
 | `too_high` | body height above `MAX_BODY_HEIGHT` |
 | `critical_tilt` | max body tilt above `CRITICAL_TILT_ANGLE` |
 | `joint_limit_timeout` | any shoulder/elbow stays near its limit too long |
+| `airborne` | no ground contact for longer than `MAX_AIRBORNE_STEPS` after first contact |
 
 ---
 
@@ -554,7 +558,7 @@ Both networks are MLPs with GELU activations and LayerNorm.
 The actor maps:
 
 ```math
-\mathbf{s}_t \in \mathbb{R}^{75}
+\mathbf{s}_t \in \mathbb{R}^{102}
 \longmapsto
 \mathrm{logits}_t \in \mathbb{R}^{8\times 3}.
 ```
@@ -562,7 +566,7 @@ The actor maps:
 The critic maps:
 
 ```math
-\mathbf{s}_t \in \mathbb{R}^{75}
+\mathbf{s}_t \in \mathbb{R}^{102}
 \longmapsto
 V_\phi(\mathbf{s}_t) \in \mathbb{R}.
 ```

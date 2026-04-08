@@ -229,6 +229,7 @@ def update_quadruped(quadruped: Quadruped):
     quadruped._needs_update = True
     quadruped.get_vertices()
     local_articulation_velocities = quadruped.get_local_articulation_velocities(DT)
+    quadruped.last_local_articulation_velocities = local_articulation_velocities.copy()
 
     quadruped.velocity += GRAVITY * DT
     quadruped.position += quadruped.velocity * DT

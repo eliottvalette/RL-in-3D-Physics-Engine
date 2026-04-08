@@ -2,6 +2,7 @@ import unittest
 import numpy as np
 
 from physics_env.core.config import (
+    MAX_AIRBORNE_STEPS,
     MAX_CONSECUTIVE_JOINT_LIMIT_STEPS,
     RESET_JOINT_ANGLE_JITTER,
     RESET_VERTICAL_AXIS_ROTATION_JITTER,
@@ -13,13 +14,19 @@ from physics_env.quadruped.quadruped_points import create_quadruped_vertices, ge
 
 
 class EnvStateFeaturesTest(unittest.TestCase):
-    def test_joint_limit_progress_and_prev_action_are_appended_to_state(self):
+    def test_state_exposes_joint_progress_actions_and_contact_history(self):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=True)
 
         env.consecutive_shoulder_limit_steps[:] = [0, 10, MAX_CONSECUTIVE_JOINT_LIMIT_STEPS, MAX_CONSECUTIVE_JOINT_LIMIT_STEPS + 30]
         env.consecutive_elbow_limit_steps[:] = [5, 25, 40, MAX_CONSECUTIVE_JOINT_LIMIT_STEPS]
         env.prev_action = np.array([-1.0, 0.0, 1.0, -1.0, 1.0, 0.0, -1.0, 1.0], dtype=np.float32)
+        env.steps_since_contact = 3
+        env.has_had_ground_contact = True
+        env.steps_since_foot_contact[:] = [0, 2, 10, 1]
+        env.has_had_foot_ground_contact[:] = [True, True, False, True]
+        env.quadruped.active_contact_indices = np.array([40, 65], dtype=np.int64)
 
+        components = env.get_state_components()
         state = env.get_state()
 
         self.assertEqual(len(state), STATE_SIZE)
@@ -34,16 +41,23 @@ class EnvStateFeaturesTest(unittest.TestCase):
             40 / MAX_CONSECUTIVE_JOINT_LIMIT_STEPS,
             1.0,
         ]
-        actual_progress = state[-16:-8]
-        actual_prev_action = state[-8:]
 
-        for actual, expected in zip(actual_progress, expected_progress):
+        for actual, expected in zip(components["joint_limit_progress"], expected_progress):
             self.assertAlmostEqual(actual, expected, places=6)
 
-        for actual, expected in zip(actual_prev_action, env.prev_action.tolist()):
+        for actual, expected in zip(components["prev_action"], env.prev_action.tolist()):
             self.assertAlmostEqual(actual, expected, places=6)
 
-    def test_leg_height_features_use_upper_and_lower_vertices(self):
+        np.testing.assert_allclose(components["foot_contact"], np.array([1.0, 0.0, 0.0, 1.0], dtype=np.float32))
+        np.testing.assert_allclose(
+            components["steps_since_foot_contact_norm"],
+            np.array([0.0, 2 / 5, 1.0, 1 / 5], dtype=np.float32),
+        )
+        self.assertAlmostEqual(float(components["steps_since_contact_norm"][0]), 3 / MAX_AIRBORNE_STEPS, places=6)
+        self.assertAlmostEqual(float(components["grounded_recently"][0]), 1.0, places=6)
+        self.assertAlmostEqual(float(components["has_had_ground_contact"][0]), 1.0, places=6)
+
+    def test_foot_position_features_use_lower_leg_bottom_face_centers(self):
         vertices = np.zeros((72, 3), dtype=np.float64)
         vertices_dict = create_quadruped_vertices()
         quadruped = Quadruped(
@@ -52,17 +66,56 @@ class EnvStateFeaturesTest(unittest.TestCase):
             vertices_dict=vertices_dict,
         )
 
-        for idx in range(72):
-            vertices[idx, 1] = 100.0
-        vertices[8:16, 1] = 10.0
-        vertices[40:48, 1] = -3.0
-        quadruped.rotated_vertices = vertices
+        vertices[40:44] = np.array(
+            [
+                [0.0, -4.0, 1.0],
+                [0.0, -4.0, 3.0],
+                [2.0, -2.0, 1.0],
+                [2.0, -2.0, 3.0],
+            ],
+            dtype=np.float64,
+        )
+        quadruped.local_transformed_vertices = vertices.copy()
+        quadruped.rotated_vertices = vertices.copy()
+        quadruped.last_local_articulation_velocities = np.zeros_like(vertices)
+        quadruped._needs_update = False
 
-        state = quadruped.get_state()
-        first_leg_min_y, first_leg_max_y = state[31:33]
+        components = quadruped.get_state_components()
+        first_foot_position = components["foot_positions_body"][:3]
+        first_foot_velocity = components["foot_velocities_body"][:3]
+        first_foot_height = float(components["foot_heights_world"][0])
 
-        self.assertAlmostEqual(first_leg_min_y, -3.0, places=6)
-        self.assertAlmostEqual(first_leg_max_y, 10.0, places=6)
+        np.testing.assert_allclose(first_foot_position, np.array([1.0, -3.0, 2.0], dtype=np.float32))
+        np.testing.assert_allclose(first_foot_velocity, np.zeros(3, dtype=np.float32))
+        self.assertAlmostEqual(first_foot_height, -3.0, places=6)
+
+    def test_body_frame_features_are_semantic(self):
+        vertices_dict = create_quadruped_vertices()
+        quadruped = Quadruped(
+            position=np.array([0.0, 5.5, 0.0], dtype=np.float64),
+            vertices=get_quadruped_vertices(),
+            vertices_dict=vertices_dict,
+            velocity=np.array([1.0, 2.0, -3.0], dtype=np.float64),
+        )
+
+        quadruped.angular_velocity = np.array([0.4, -0.2, 0.1], dtype=np.float64)
+        components = quadruped.get_state_components()
+        expected_com_velocity = quadruped.get_center_of_mass_velocity()
+        expected_task_velocity = np.array(
+            [expected_com_velocity[0], expected_com_velocity[1], -expected_com_velocity[2]],
+            dtype=np.float32,
+        )
+
+        self.assertAlmostEqual(float(components["body_height"][0]), 5.5, places=6)
+        self.assertAlmostEqual(float(components["body_height_error"][0]), 0.5, places=6)
+        np.testing.assert_allclose(components["gravity_body"], np.array([0.0, -1.0, 0.0], dtype=np.float32), atol=1e-6)
+        np.testing.assert_allclose(components["task_forward_body"], np.array([0.0, 0.0, -1.0], dtype=np.float32), atol=1e-6)
+        np.testing.assert_allclose(components["linear_velocity_task"], expected_task_velocity, atol=1e-6)
+        np.testing.assert_allclose(
+            components["joint_limit_fraction"],
+            np.zeros(8, dtype=np.float32),
+            atol=1e-6,
+        )
 
     def test_part_masses_are_derived_from_uniform_density(self):
         vertices_dict = create_quadruped_vertices()

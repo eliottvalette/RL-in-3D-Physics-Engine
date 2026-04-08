@@ -4,6 +4,8 @@ from unittest.mock import patch
 import numpy as np
 
 from physics_env.core.config import (
+    ANGULAR_VELOCITY_PENALTY_COEF,
+    MAX_AIRBORNE_STEPS,
     JOINT_LIMIT_THRESHOLD,
     MAX_BODY_HEIGHT,
     MAX_CONSECUTIVE_JOINT_LIMIT_STEPS,
@@ -11,6 +13,7 @@ from physics_env.core.config import (
     PROGRESS_REWARD_COEF,
     CRITICAL_TILT_ANGLE,
     TERMINAL_PENALTY_CRITICAL_TILT,
+    TERMINAL_PENALTY_AIRBORNE,
     TERMINAL_PENALTY_JOINT_LIMIT_TIMEOUT,
     TERMINAL_PENALTY_TOO_HIGH,
     TERMINAL_PENALTY_TOO_LOW,
@@ -20,6 +23,10 @@ from physics_env.envs.quadruped_env import QuadrupedEnv
 
 def _freeze_physics():
     return patch("physics_env.envs.quadruped_env.update_quadruped", lambda quadruped: None)
+
+
+def _set_ground_contact(env):
+    env.quadruped.active_contact_indices = np.array([0], dtype=np.int64)
 
 
 class TerminalRewardsTest(unittest.TestCase):
@@ -70,6 +77,7 @@ class TerminalRewardsTest(unittest.TestCase):
 
     def test_tilt_between_pose_and_critical_threshold_is_not_terminal(self):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
+        _set_ground_contact(env)
         env.prev_potential = 0.0
         env.quadruped.position[2] = -0.02
         env.quadruped.orientation = env.quadruped._euler_to_quaternion(
@@ -117,6 +125,7 @@ class TerminalRewardsTest(unittest.TestCase):
 
     def test_forward_progress_is_the_only_positive_locomotion_reward(self):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
+        _set_ground_contact(env)
         env.prev_potential = 0.0
         env.quadruped.position[2] = -0.02
         env.quadruped.velocity[2] = -0.5
@@ -135,6 +144,55 @@ class TerminalRewardsTest(unittest.TestCase):
         self.assertAlmostEqual(env.last_reward_components["forward_speed"], 0.5, places=6)
         self.assertAlmostEqual(reward, env.last_reward_components["distance_reward"], places=6)
 
+    def test_forward_progress_without_recent_contact_does_not_pay(self):
+        env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
+        env.prev_potential = 0.0
+        env.quadruped.position[2] = -0.02
+        env.quadruped.velocity[2] = -0.5
+
+        with _freeze_physics():
+            _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
+
+        self.assertFalse(done)
+        self.assertEqual(env.last_done_reason, "running")
+        self.assertAlmostEqual(env.last_reward_components["raw_distance_reward"], 0.02, places=6)
+        self.assertEqual(env.last_reward_components["distance_reward"], 0.0)
+        self.assertEqual(env.last_reward_components["contact_reward_scale"], 0.0)
+        self.assertEqual(reward, 0.0)
+
+    def test_airborne_timeout_is_terminal_after_first_ground_contact(self):
+        env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
+        env.has_had_ground_contact = True
+        env.steps_since_contact = MAX_AIRBORNE_STEPS
+        env.prev_potential = 0.0
+
+        with _freeze_physics():
+            _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
+
+        self.assertTrue(done)
+        self.assertEqual(env.last_done_reason, "airborne")
+        self.assertAlmostEqual(reward, TERMINAL_PENALTY_AIRBORNE, places=6)
+        self.assertEqual(env.last_reward_components["locomotion_reward"], 0.0)
+
+    def test_angular_velocity_penalty_discourages_body_oscillation(self):
+        env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
+        _set_ground_contact(env)
+        env.prev_potential = 0.0
+        env.quadruped.angular_velocity = np.array([0.0, 2.0, 0.0], dtype=np.float64)
+
+        with _freeze_physics():
+            _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
+
+        self.assertFalse(done)
+        self.assertEqual(env.last_done_reason, "running")
+        self.assertAlmostEqual(env.last_reward_components["angular_velocity_norm"], 2.0, places=6)
+        self.assertAlmostEqual(
+            env.last_reward_components["angular_velocity_penalty"],
+            -ANGULAR_VELOCITY_PENALTY_COEF * 2.0,
+            places=6,
+        )
+        self.assertAlmostEqual(reward, -ANGULAR_VELOCITY_PENALTY_COEF * 2.0, places=6)
+
     def test_forward_speed_without_position_progress_does_not_pay(self):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
         env.prev_potential = 0.0
@@ -151,6 +209,7 @@ class TerminalRewardsTest(unittest.TestCase):
 
     def test_backward_motion_gets_negative_progress_reward(self):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
+        _set_ground_contact(env)
         env.prev_potential = 0.0
         env.quadruped.position[2] = 0.8
         env.quadruped.velocity[2] = 1.0

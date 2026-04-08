@@ -74,6 +74,10 @@ class QuadrupedEnv:
         self.consecutive_steps_critical_tilt = 0
         self.consecutive_shoulder_limit_steps = np.zeros(4, dtype=np.int32)
         self.consecutive_elbow_limit_steps = np.zeros(4, dtype=np.int32)
+        self.steps_since_contact = 0
+        self.has_had_ground_contact = False
+        self.steps_since_foot_contact = np.zeros(4, dtype=np.int32)
+        self.has_had_foot_ground_contact = np.zeros(4, dtype=bool)
         self.prev_action = np.zeros(8, dtype=np.float32)
         self.last_reward_components = {}
         self.last_done_reason = "running"
@@ -96,12 +100,75 @@ class QuadrupedEnv:
         self.cumulative_locomotion_reward = 0.0
         self.prev_action.fill(0.0)
         self._reset_safety_counters()
+        self.steps_since_contact = 0
+        self.has_had_ground_contact = False
+        self.steps_since_foot_contact.fill(0)
+        self.has_had_foot_ground_contact.fill(False)
         self.last_reward_components = {}
         self.last_done_reason = "running"
         self.quadruped.too_high = False
         self.quadruped.steps_since_too_high = 0
         self.quadruped.too_low = False
         self.quadruped.steps_since_too_low = 0
+
+    @staticmethod
+    def _normalize_contact_steps(steps_since_contact, has_contact_history, max_steps):
+        if not has_contact_history:
+            return 1.0
+        return float(np.clip(steps_since_contact / max_steps, 0.0, 1.0))
+
+    def _get_lower_leg_contact_flags(self):
+        active_contact_indices = np.asarray(getattr(self.quadruped, "active_contact_indices", []), dtype=np.int64)
+        lower_leg_contact_flags = np.zeros(4, dtype=np.float32)
+        for vertex_idx in active_contact_indices.tolist():
+            part_index = int(vertex_idx // 8)
+            if 5 <= part_index <= 8:
+                lower_leg_contact_flags[part_index - 5] = 1.0
+        return lower_leg_contact_flags
+
+    def get_state_components(self):
+        quadruped_components = self.quadruped.get_state_components()
+        foot_positions_body = quadruped_components["foot_positions_body"].reshape(4, 3)
+        foot_contact = self._get_lower_leg_contact_flags()
+        grounded_recently = 1.0 if (self.has_had_ground_contact and self.steps_since_contact <= CONTACT_GRACE_STEPS) else 0.0
+        grounded_leg_count_norm = float(foot_contact.mean())
+
+        if np.any(foot_contact > 0.5):
+            support_centroid_body_xz = foot_positions_body[foot_contact > 0.5][:, [0, 2]].mean(axis=0).astype(np.float32)
+            com_minus_support_centroid_body_xz = (
+                self.quadruped.local_center_of_mass[[0, 2]] - support_centroid_body_xz.astype(np.float64)
+            ).astype(np.float32)
+        else:
+            support_centroid_body_xz = np.zeros(2, dtype=np.float32)
+            com_minus_support_centroid_body_xz = np.zeros(2, dtype=np.float32)
+
+        foot_contact_steps = np.array(
+            [
+                self._normalize_contact_steps(int(steps), bool(has_contact), CONTACT_GRACE_STEPS)
+                for steps, has_contact in zip(self.steps_since_foot_contact, self.has_had_foot_ground_contact)
+            ],
+            dtype=np.float32,
+        )
+        contact_count = int(len(getattr(self.quadruped, "active_contact_indices", [])))
+
+        components = {
+            **quadruped_components,
+            "joint_limit_progress": self._get_joint_limit_progress(),
+            "prev_action": self.prev_action.astype(np.float32),
+            "foot_contact": foot_contact,
+            "steps_since_foot_contact_norm": foot_contact_steps,
+            "contact_count_norm": np.array([min(contact_count, MAX_CONTACT_POINTS) / MAX_CONTACT_POINTS], dtype=np.float32),
+            "steps_since_contact_norm": np.array(
+                [self._normalize_contact_steps(self.steps_since_contact, self.has_had_ground_contact, MAX_AIRBORNE_STEPS)],
+                dtype=np.float32,
+            ),
+            "grounded_recently": np.array([grounded_recently], dtype=np.float32),
+            "has_had_ground_contact": np.array([1.0 if self.has_had_ground_contact else 0.0], dtype=np.float32),
+            "grounded_leg_count_norm": np.array([grounded_leg_count_norm], dtype=np.float32),
+            "support_centroid_body_xz": support_centroid_body_xz,
+            "com_minus_support_centroid_body_xz": com_minus_support_centroid_body_xz,
+        }
+        return components
 
     def reset_episode(self, randomize=False, pose_jitter=False):
         if randomize and pose_jitter:
@@ -273,6 +340,13 @@ class QuadrupedEnv:
                 "progress_delta": 0.0,
                 "forward_speed": 0.0,
                 "terminal_event_reward": 0.0,
+                "raw_distance_reward": 0.0,
+                "angular_velocity_penalty": 0.0,
+                "angular_velocity_norm": 0.0,
+                "contact_count": float(len(getattr(self.quadruped, "active_contact_indices", []))),
+                "steps_since_contact": float(self.steps_since_contact),
+                "grounded_recently": 1.0,
+                "contact_reward_scale": 1.0,
                 "tilt_reward_scale": 1.0,
                 "height_reward_scale": 1.0,
                 "raw_pose_scale": 1.0,
@@ -281,12 +355,17 @@ class QuadrupedEnv:
                 "side_tilt_deg": 0.0,
             }
             self.last_done_reason = "bench_mode"
+            self.prev_action = np.concatenate(
+                [
+                    np.asarray(shoulder_actions, dtype=np.float32),
+                    np.asarray(elbow_actions, dtype=np.float32),
+                ],
+                dtype=np.float32,
+            )
             next_state = self.get_state()
             end_step_time = time.time()
             step_time = end_step_time - start_step_time
             return next_state, 0.0, False, step_time
-
-        next_state = self.get_state()
         current_action = np.concatenate(
             [
                 np.asarray(shoulder_actions, dtype=np.float32),
@@ -299,10 +378,10 @@ class QuadrupedEnv:
         forward_progress = -float(self.quadruped.position[2])
         progress_delta = 0.0
         if self.prev_potential is None:
-            distance_reward = 0.0
+            raw_distance_reward = 0.0
         else:
             progress_delta = forward_progress - self.prev_potential
-            distance_reward = PROGRESS_REWARD_COEF * float(progress_delta)
+            raw_distance_reward = PROGRESS_REWARD_COEF * float(progress_delta)
         self.prev_potential = forward_progress
 
         # ----------  b) metriques de mouvement et posture -------------------------
@@ -310,6 +389,26 @@ class QuadrupedEnv:
 
         forward_tilt, side_tilt = self._compute_body_tilt_angles()
         max_tilt = max(forward_tilt, side_tilt)
+        angular_velocity_norm = float(np.linalg.norm(self.quadruped.angular_velocity))
+        angular_velocity_penalty = -ANGULAR_VELOCITY_PENALTY_COEF * angular_velocity_norm
+
+        contact_count = int(len(getattr(self.quadruped, "active_contact_indices", [])))
+        if contact_count > 0:
+            self.has_had_ground_contact = True
+            self.steps_since_contact = 0
+        else:
+            self.steps_since_contact += 1
+        foot_contact_flags = self._get_lower_leg_contact_flags()
+        foot_contact_mask = foot_contact_flags > 0.5
+        self.has_had_foot_ground_contact = np.logical_or(self.has_had_foot_ground_contact, foot_contact_mask)
+        self.steps_since_foot_contact = np.where(
+            foot_contact_mask,
+            0,
+            self.steps_since_foot_contact + 1,
+        )
+        grounded_recently = self.has_had_ground_contact and self.steps_since_contact <= CONTACT_GRACE_STEPS
+        airborne_timeout = self.has_had_ground_contact and self.steps_since_contact > MAX_AIRBORNE_STEPS
+        distance_reward = raw_distance_reward if grounded_recently else 0.0
 
         # ----------  c) contraintes terminales -------------------------------------
         body_height = float(self.quadruped.position[1])
@@ -370,6 +469,9 @@ class QuadrupedEnv:
         elif joint_limit_timeout:
             done_reason = "joint_limit_timeout"
             terminal_event_reward = TERMINAL_PENALTY_JOINT_LIMIT_TIMEOUT
+        elif airborne_timeout:
+            done_reason = "airborne"
+            terminal_event_reward = TERMINAL_PENALTY_AIRBORNE
         done = done_reason != "running"
 
         # Inform the quadruped that it is in danger
@@ -379,17 +481,17 @@ class QuadrupedEnv:
         self.quadruped.steps_since_too_low = self.consecutive_steps_below_critical_height
 
         # ----------  d)  Somme finale -------------------------
-        # Objectif propre: si la posture est invalide, l'episode echoue et ne
-        # touche aucune reward de locomotion. Sinon seul le progres avant signe
-        # sert de signal d'optimisation.
+        # Objectif: le progres ne compte que dans un regime de locomotion au sol.
+        # Une petite penalite de vitesse angulaire limite les oscillations du body.
         locomotion_reward = distance_reward if not done else 0.0
         if done:
             reward = terminal_event_reward
         else:
-            reward = locomotion_reward
+            reward = locomotion_reward + angular_velocity_penalty
             self.cumulative_locomotion_reward += locomotion_reward
         self.last_reward_components = {
             "distance_reward": float(distance_reward),
+            "raw_distance_reward": float(raw_distance_reward),
             "locomotion_reward": float(locomotion_reward),
             "cumulative_locomotion_reward": float(self.cumulative_locomotion_reward),
             "forward_progress": float(forward_progress),
@@ -397,15 +499,22 @@ class QuadrupedEnv:
             "progress_delta": float(progress_delta),
             "forward_speed": float(forward_speed),
             "terminal_event_reward": float(terminal_event_reward),
+            "angular_velocity_penalty": float(angular_velocity_penalty),
+            "angular_velocity_norm": float(angular_velocity_norm),
+            "contact_count": float(contact_count),
+            "steps_since_contact": float(self.steps_since_contact),
+            "grounded_recently": 1.0 if grounded_recently else 0.0,
+            "contact_reward_scale": 1.0 if grounded_recently else 0.0,
             "tilt_reward_scale": float(tilt_reward_scale),
             "height_reward_scale": float(height_reward_scale),
             "raw_pose_scale": float(raw_pose_scale),
-            "locomotion_reward_scale": float(locomotion_reward_scale),
+            "locomotion_reward_scale": float(locomotion_reward_scale * (1.0 if grounded_recently else 0.0)),
             "forward_tilt_deg": float(np.degrees(forward_tilt)),
             "side_tilt_deg": float(np.degrees(side_tilt)),
         }
         self.last_done_reason = done_reason
         self.prev_action = current_action
+        next_state = self.get_state()
         # -----------------------------------------------------
         end_step_time = time.time()
         step_time = end_step_time - start_step_time
@@ -424,9 +533,7 @@ class QuadrupedEnv:
     
     def get_state(self):
         """Get the current state of the quadruped."""
-        base_state = np.asarray(self.quadruped.get_state(), dtype=np.float32)
-        joint_limit_progress = self._get_joint_limit_progress()
-        state = np.concatenate([base_state, joint_limit_progress, self.prev_action], dtype=np.float32)
+        state = np.concatenate(list(self.get_state_components().values()), dtype=np.float32)
         return state.tolist()
 
     def render_ui(self, reward, done = False, step_time = 0.0, state_value = None):

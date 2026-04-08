@@ -8,8 +8,7 @@ import seaborn as sns
 import os
 import json
 import pandas as pd
-from datetime import datetime
-from physics_env.core.config import PLOT_INTERVAL, SAVE_INTERVAL
+from physics_env.core.config import PLOT_DPI, PLOT_INTERVAL, SAVE_INTERVAL
 
 # Remove PLAYERS
 # PLAYERS = ['Player_0', 'Player_1', 'Player_2']
@@ -27,10 +26,11 @@ class DataCollector:
         self.save_interval = save_interval
         self.plot_interval = plot_interval
         self.output_dir = output_dir
-        self.current_episode_states = []
-        self.batch_episode_states = [] # Contient un liste de current_episode_states qui seront ajouté toutes les save_interval dans le fichier json
         self.batch_episode_metrics = [] # Contient les métriques d'entraînement pour chaque épisode
+        self.batch_returns = []
+        self.batch_state_values = []
         self.current_episode_metrics = [] # Liste des métriques pour l'épisode courant
+        self.value_distributions_filename = os.path.join(self.output_dir, "value_distributions.npz")
         
         # Créer le répertoire pour les JSON s'il n'existe pas
         if not os.path.exists(output_dir):
@@ -57,13 +57,8 @@ class DataCollector:
         )
     
     def add_state(self, state):
-        """
-        Ajoute un état à l'épisode courant. Convertit les numpy arrays en listes pour la sérialisation JSON.
-        """
-        if isinstance(state, np.ndarray):
-            self.current_episode_states.append(state.tolist())
-        else:
-            self.current_episode_states.append(state.copy() if hasattr(state, 'copy') else state)
+        """Conserve l'API existante sans persister les états, inutiles pour les plots actuels."""
+        del state
     
     def add_metrics(self, episode_metrics):
         """
@@ -80,47 +75,45 @@ class DataCollector:
         Args:
             episode_num (int): Numéro de l'épisode
         """
-        # Ajouter l'épisode courant au batch
-        self.batch_episode_states.append(self.current_episode_states)
-
         # Calculer la moyenne des métriques de l'épisode
-        # Récupérer toutes les clés présentes dans les dicts
         all_keys = set()
         for m in self.current_episode_metrics:
             all_keys.update(m.keys())
         mean_metrics = {}
-        LIST_KEYS = ["returns", "advantages", "state_values"]
+        returns_values = []
+        state_values = []
         for key in all_keys:
             values = [m[key] for m in self.current_episode_metrics if key in m and m[key] is not None]
-            if key in LIST_KEYS:
-                # S'assurer que chaque valeur est une liste
-                concat = []
-                for v in values:
-                    if not isinstance(v, list):
-                        v = [v]
-                    concat.extend(v)
-                mean_metrics[key] = concat
+            if key == "returns":
+                for value in values:
+                    if not isinstance(value, list):
+                        value = [value]
+                    returns_values.extend(value)
+                mean_metrics["returns_mean"] = float(np.mean(returns_values)) if returns_values else None
+            elif key == "state_values":
+                for value in values:
+                    if not isinstance(value, list):
+                        value = [value]
+                    state_values.extend(value)
+                mean_metrics["state_value_mean"] = float(np.mean(state_values)) if state_values else None
+            elif key == "advantages":
+                advantage_values = []
+                for value in values:
+                    if not isinstance(value, list):
+                        value = [value]
+                    advantage_values.extend(value)
+                mean_metrics["advantage_mean"] = float(np.mean(advantage_values)) if advantage_values else None
             else:
                 mean_metrics[key] = float(np.mean(values)) if values else None
         self.batch_episode_metrics.append(mean_metrics)
+        if returns_values:
+            self.batch_returns.append(np.asarray(returns_values, dtype=np.float32))
+        if state_values:
+            self.batch_state_values.append(np.asarray(state_values, dtype=np.float32))
         self.current_episode_metrics = []
-        
+
         # Vérifier si on a atteint l'intervalle de sauvegarde
-        if len(self.batch_episode_states) >= self.save_interval:
-            # Sauvegarder les états
-            states_filename = os.path.join(self.output_dir, "episodes_states.json")
-            
-            # Créer le fichier avec un dictionnaire vide s'il n'existe pas
-            if not os.path.exists(states_filename):
-                with open(states_filename, 'w') as f:
-                    f.write("{}")
-            
-            # Ajouter les nouveaux épisodes au fichier JSON
-            for i, episode_states in enumerate(self.batch_episode_states):
-                episode_idx = episode_num - len(self.batch_episode_states) + i + 1
-                self._append_to_json(states_filename, str(episode_idx), episode_states)
-            
-            # Sauvegarder les métriques
+        if len(self.batch_episode_metrics) >= self.save_interval:
             metrics_filename = os.path.join(self.output_dir, "metrics_history.json")
             
             # Créer le fichier avec un dictionnaire vide s'il n'existe pas
@@ -134,11 +127,10 @@ class DataCollector:
                 self._append_to_json(metrics_filename, str(episode_idx), episode_metrics)
 
             # Reset batches
-            self.batch_episode_states = []
             self.batch_episode_metrics = []
-        
-        # Reset current episode states
-        self.current_episode_states = []
+            self._append_value_distributions()
+            self.batch_returns = []
+            self.batch_state_values = []
 
         if episode_num % (self.plot_interval) == (self.plot_interval) - 1:
             # Load Jsons
@@ -148,6 +140,39 @@ class DataCollector:
                     metrics_data = json.load(f)
                 self.visualizer.plot_metrics(metrics_data)
                 plt.close('all')
+
+    def _load_value_distributions(self):
+        if not os.path.exists(self.value_distributions_filename):
+            return np.empty(0, dtype=np.float32), np.empty(0, dtype=np.float32)
+
+        with np.load(self.value_distributions_filename) as distributions:
+            returns = distributions.get("returns")
+            state_values = distributions.get("state_values")
+            if returns is None:
+                returns = np.empty(0, dtype=np.float32)
+            if state_values is None:
+                state_values = np.empty(0, dtype=np.float32)
+            return returns.astype(np.float32, copy=False), state_values.astype(np.float32, copy=False)
+
+    def _append_value_distributions(self):
+        existing_returns, existing_state_values = self._load_value_distributions()
+
+        if self.batch_returns:
+            new_returns = np.concatenate(self.batch_returns).astype(np.float32, copy=False)
+            existing_returns = np.concatenate([existing_returns, new_returns]) if existing_returns.size else new_returns
+        if self.batch_state_values:
+            new_state_values = np.concatenate(self.batch_state_values).astype(np.float32, copy=False)
+            existing_state_values = (
+                np.concatenate([existing_state_values, new_state_values])
+                if existing_state_values.size
+                else new_state_values
+            )
+
+        np.savez_compressed(
+            self.value_distributions_filename,
+            returns=existing_returns,
+            state_values=existing_state_values,
+        )
 
     def _append_to_json(self, file_path, key, data):
         """
@@ -231,18 +256,27 @@ class Visualizer:
 
     def _metric_value_from_episode(self, episode_metrics, metric_name):
         if metric_name == "returns_mean":
+            direct_value = episode_metrics.get("returns_mean")
+            if direct_value is not None:
+                return float(direct_value)
             values = episode_metrics.get("returns")
             if values:
                 return float(np.mean(values))
             return None
 
         if metric_name == "state_value_mean":
+            direct_value = episode_metrics.get("state_value_mean")
+            if direct_value is not None:
+                return float(direct_value)
             values = episode_metrics.get("state_values")
             if values:
                 return float(np.mean(values))
             return None
 
         if metric_name == "advantage_mean":
+            direct_value = episode_metrics.get("advantage_mean")
+            if direct_value is not None:
+                return float(direct_value)
             values = episode_metrics.get("advantages")
             if values:
                 return float(np.mean(values))
@@ -314,6 +348,27 @@ class Visualizer:
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
 
+    def _place_legend(self, ax, ncol=1):
+        ax.legend(
+            loc="upper right",
+            frameon=True,
+            facecolor="#151B23",
+            edgecolor="#333A45",
+            fontsize=9,
+            ncol=ncol,
+        )
+
+    @staticmethod
+    def _finalize_figure(fig, left=0.055, right=0.985, bottom=0.06, top=0.955, wspace=0.22, hspace=0.30):
+        fig.subplots_adjust(
+            left=left,
+            right=right,
+            bottom=bottom,
+            top=top,
+            wspace=wspace,
+            hspace=hspace,
+        )
+
     def _plot_timeseries(self, ax, episodes, values, title, ylabel, color, robust_ylim=True):
         if len(values) == 0:
             ax.text(0.5, 0.5, "No data", ha="center", va="center", color="#888888", transform=ax.transAxes)
@@ -366,9 +421,20 @@ class Visualizer:
             if ylim is not None:
                 ax.set_ylim(*ylim)
 
-        ax.legend(frameon=True, facecolor="#151B23", edgecolor="#333A45", fontsize=9, ncol=2)
+        self._place_legend(ax, ncol=2)
 
-    def plot_metrics(self, metrics_data, dpi=500):
+    def _load_value_distributions(self):
+        file_path = os.path.join(self.output_dir, "value_distributions.npz")
+        if not os.path.exists(file_path):
+            return None, None
+        with np.load(file_path) as distributions:
+            returns = distributions.get("returns")
+            state_values = distributions.get("state_values")
+            if returns is None or state_values is None:
+                return None, None
+            return np.asarray(returns, dtype=np.float64), np.asarray(state_values, dtype=np.float64)
+
+    def plot_metrics(self, metrics_data, dpi=PLOT_DPI):
         """
         Dashboard principal mono-curve 4x3.
         """
@@ -395,15 +461,15 @@ class Visualizer:
             self._plot_timeseries(ax, episodes, values, title, ylabel, color)
 
         fig.suptitle("RL Training Dashboard", fontsize=22, color="#F5F7FA", y=0.992)
-        plt.tight_layout(rect=[0, 0, 1, 0.985])
-        plt.savefig(os.path.join(self.viz_dir, 'RL_metrics.jpg'), dpi=dpi, bbox_inches='tight')
+        self._finalize_figure(fig, bottom=0.055, top=0.955, wspace=0.20, hspace=0.28)
+        plt.savefig(os.path.join(self.viz_dir, 'RL_metrics.jpg'), dpi=dpi)
         plt.close()
         self.plot_metrics_grouped(metrics_data, dpi)
         self.plot_losses(metrics_data, dpi)
         self.plot_state_value_distributions(metrics_data, dpi)
         self.plot_steps_per_episode(metrics_data, dpi)
 
-    def plot_metrics_grouped(self, metrics_data, dpi=500):
+    def plot_metrics_grouped(self, metrics_data, dpi=PLOT_DPI):
         """
         Dashboard groupé par familles de signaux.
         """
@@ -431,7 +497,8 @@ class Visualizer:
             [
                 ("tilt_reward_scale", "Tilt Scale", self.palette["orange"]),
                 ("height_reward_scale", "Height Scale", self.palette["yellow"]),
-                ("locomotion_reward_scale", "Pose Scale", self.palette["green"]),
+                ("contact_reward_scale", "Contact Scale", self.palette["teal"]),
+                ("locomotion_reward_scale", "Locomotion Scale", self.palette["green"]),
                 ("mean_locomotion_reward_scale", "Episode Mean Pose Scale", self.palette["blue"]),
             ],
         )
@@ -444,6 +511,7 @@ class Visualizer:
                 ("forward_progress", "Progress", self.palette["orange"]),
                 ("progress_delta", "Progress Delta", self.palette["yellow"]),
                 ("forward_speed", "Forward Speed", self.palette["teal"]),
+                ("angular_velocity_penalty", "Angular Vel Penalty", self.palette["red"]),
                 ("cumulative_locomotion_reward", "Cumulative Locomotion", self.palette["green"]),
             ],
         )
@@ -470,7 +538,7 @@ class Visualizer:
             if ylim is not None:
                 axes[4].set_ylim(*ylim)
             self._style_axis(axes[4], "Episode Length", ylabel="Steps")
-            axes[4].legend(frameon=True, facecolor="#151B23", edgecolor="#333A45", fontsize=9)
+            self._place_legend(axes[4])
         else:
             self._style_axis(axes[4], "Episode Length", ylabel="Steps")
             axes[4].text(0.5, 0.5, "No data", ha="center", va="center", color="#888888", transform=axes[4].transAxes)
@@ -485,6 +553,7 @@ class Visualizer:
                 ("done_reason_joint_limit_timeout", "Joint Limit", self.palette["magenta"]),
                 ("done_reason_too_low", "Too Low", self.palette["cyan"]),
                 ("done_reason_too_high", "Too High", self.palette["yellow"]),
+                ("done_reason_airborne", "Airborne", self.palette["blue"]),
                 ("done_reason_max_steps", "Clean Episode", self.palette["green"]),
             ],
             y_limits=(-0.02, 1.02),
@@ -492,11 +561,11 @@ class Visualizer:
         )
 
         fig.suptitle("RL Training Dashboard", fontsize=22, color="#F5F7FA", y=0.992)
-        plt.tight_layout(rect=[0, 0, 1, 0.985])
-        plt.savefig(os.path.join(self.viz_dir, 'RL_metrics_group.jpg'), dpi=dpi, bbox_inches='tight')
+        self._finalize_figure(fig, bottom=0.055, top=0.955, wspace=0.20, hspace=0.30)
+        plt.savefig(os.path.join(self.viz_dir, 'RL_metrics_group.jpg'), dpi=dpi)
         plt.close()
 
-    def plot_losses(self, metrics_data, dpi=500):
+    def plot_losses(self, metrics_data, dpi=PLOT_DPI):
         """
         Trace les losses en full-scale + zoom robuste.
         """
@@ -529,31 +598,34 @@ class Visualizer:
             self._style_axis(zoom_ax, f"{name} Zoomed", ylabel="Loss")
 
         fig.suptitle("Actor / Critic Losses", fontsize=20, color="#F5F7FA", y=0.995)
-        plt.tight_layout(rect=[0, 0, 1, 0.985])
-        plt.savefig(os.path.join(self.viz_dir, 'losses.jpg'), dpi=dpi, bbox_inches='tight')
+        self._finalize_figure(fig, bottom=0.06, top=0.95, wspace=0.18, hspace=0.24)
+        plt.savefig(os.path.join(self.viz_dir, 'losses.jpg'), dpi=dpi)
         plt.close()
 
-    def plot_state_value_distributions(self, metrics_data, dpi=500):
+    def plot_state_value_distributions(self, metrics_data, dpi=PLOT_DPI):
         """
         Histogrammes dark des TD targets et state values avec stats de résumé.
         """
-        all_returns = []
-        all_state_values = []
-        for episode_metrics in metrics_data.values():
-            if 'returns' in episode_metrics and episode_metrics['returns'] is not None:
-                all_returns.extend(episode_metrics['returns'])
-            if 'state_values' in episode_metrics and episode_metrics['state_values'] is not None:
-                all_state_values.extend(episode_metrics['state_values'])
-
-        if not all_returns or not all_state_values:
-            print("[VIZ] Not enough value data found, skipping value distribution plots.")
-            return
+        all_returns, all_state_values = self._load_value_distributions()
+        if all_returns is None or all_state_values is None:
+            returns_fallback = []
+            state_values_fallback = []
+            for episode_metrics in metrics_data.values():
+                if 'returns' in episode_metrics and episode_metrics['returns'] is not None:
+                    returns_fallback.extend(episode_metrics['returns'])
+                if 'state_values' in episode_metrics and episode_metrics['state_values'] is not None:
+                    state_values_fallback.extend(episode_metrics['state_values'])
+            if not returns_fallback or not state_values_fallback:
+                print("[VIZ] Not enough value data found, skipping value distribution plots.")
+                return
+            all_returns = np.asarray(returns_fallback, dtype=np.float64)
+            all_state_values = np.asarray(state_values_fallback, dtype=np.float64)
 
         fig, axes = plt.subplots(2, 1, figsize=(16, 9), sharex=True)
         xlim = self._combined_robust_xlim(all_returns, all_state_values)
         plots = [
-            (axes[0], np.asarray(all_returns, dtype=np.float64), "Returns", self.palette["orange"]),
-            (axes[1], np.asarray(all_state_values, dtype=np.float64), "Critic State Values", self.palette["blue"]),
+            (axes[0], all_returns, "Returns", self.palette["orange"]),
+            (axes[1], all_state_values, "Critic State Values", self.palette["blue"]),
         ]
 
         for ax, values, title, color in plots:
@@ -574,11 +646,11 @@ class Visualizer:
             )
 
         fig.suptitle("Value Distributions", fontsize=20, color="#F5F7FA", y=0.995)
-        plt.tight_layout(rect=[0, 0, 1, 0.985])
-        plt.savefig(os.path.join(self.viz_dir, 'state_value_distributions.jpg'), dpi=dpi, bbox_inches='tight')
+        self._finalize_figure(fig, bottom=0.08, top=0.94, wspace=0.18, hspace=0.26)
+        plt.savefig(os.path.join(self.viz_dir, 'state_value_distributions.jpg'), dpi=dpi)
         plt.close()
 
-    def plot_steps_per_episode(self, metrics_data, dpi=500):
+    def plot_steps_per_episode(self, metrics_data, dpi=PLOT_DPI):
         """
         Graphique dark du nombre de steps par épisode avec tendance lisible.
         """
@@ -598,21 +670,21 @@ class Visualizer:
         steps_array = np.asarray(steps_counts, dtype=np.float64)
         rolling_avg = self._rolling_average(steps_array, window=min(30, max(10, len(steps_array) // 15)))
 
-        plt.figure(figsize=(16, 9))
-        plt.scatter(episodes_array, steps_array, color=self.palette["blue"], alpha=0.35, s=12, label="Episode Steps")
-        plt.plot(episodes_array, rolling_avg, color=self.palette["red"], linewidth=2.8, label="Rolling Mean")
-        plt.axhline(np.mean(steps_array), color=self.palette["yellow"], linestyle="--", linewidth=1.8, label=f"Mean = {np.mean(steps_array):.1f}")
+        fig, ax = plt.subplots(figsize=(16, 9))
+        ax.scatter(episodes_array, steps_array, color=self.palette["blue"], alpha=0.35, s=12, label="Episode Steps")
+        ax.plot(episodes_array, rolling_avg, color=self.palette["red"], linewidth=2.8, label="Rolling Mean")
+        ax.axhline(np.mean(steps_array), color=self.palette["yellow"], linestyle="--", linewidth=1.8, label=f"Mean = {np.mean(steps_array):.1f}")
 
         ylim = self._robust_ylim(steps_array, lower_q=1.0, upper_q=99.0, pad_ratio=0.08)
         if ylim is not None:
-            plt.ylim(*ylim)
+            ax.set_ylim(*ylim)
 
-        plt.xlabel('Episode')
-        plt.ylabel('Steps')
-        plt.title('Steps per Episode')
-        plt.legend(frameon=True, facecolor="#151B23", edgecolor="#333A45")
-        plt.grid(True, alpha=0.28)
-        plt.figtext(
+        ax.set_xlabel('Episode')
+        ax.set_ylabel('Steps')
+        ax.set_title('Steps per Episode')
+        self._place_legend(ax)
+        ax.grid(True, alpha=0.28)
+        fig.text(
             0.5,
             0.02,
             f"min={np.min(steps_array):.0f} | max={np.max(steps_array):.0f} | std={np.std(steps_array):.1f}",
@@ -622,18 +694,14 @@ class Visualizer:
             bbox=dict(boxstyle="round,pad=0.3", facecolor="#151B23", edgecolor="#333A45", alpha=0.95),
         )
 
-        plt.tight_layout()
-        plt.savefig(os.path.join(self.viz_dir, 'steps_per_episode.jpg'), dpi=dpi, bbox_inches='tight')
+        self._finalize_figure(fig, bottom=0.11, top=0.94, wspace=0.18, hspace=0.22)
+        plt.savefig(os.path.join(self.viz_dir, 'steps_per_episode.jpg'), dpi=dpi)
         plt.close()
 
 if __name__ == "__main__":
     visualizer = Visualizer(plot_interval=PLOT_INTERVAL, save_interval=SAVE_INTERVAL)
-    # On les json une seule fois
-    states_path = os.path.join(visualizer.output_dir, "episodes_states.json")
     metrics_path = os.path.join(visualizer.output_dir, "metrics_history.json")
 
-    with open(states_path, 'r') as f:
-        states_data = json.load(f)
     with open(metrics_path, 'r') as f:
         metrics_data = json.load(f)
 

@@ -21,7 +21,7 @@ from physics_env.envs.quadruped_env import QuadrupedEnv
 from visualization import DataCollector
 
 
-EVENT_KEYS = ("too_low", "too_high", "critical_tilt", "joint_limit_timeout")
+EVENT_KEYS = ("too_low", "too_high", "critical_tilt", "joint_limit_timeout", "airborne")
 
 
 def _new_event_flags():
@@ -40,6 +40,7 @@ def _event_metrics(event_flags):
         "done_reason_too_high": 1.0 if event_flags["too_high"] else 0.0,
         "done_reason_critical_tilt": 1.0 if event_flags["critical_tilt"] else 0.0,
         "done_reason_joint_limit_timeout": 1.0 if event_flags["joint_limit_timeout"] else 0.0,
+        "done_reason_airborne": 1.0 if event_flags["airborne"] else 0.0,
         "done_reason_max_steps": 1.0 if clean_episode else 0.0,
     }
 
@@ -81,7 +82,6 @@ def run_episode(env: QuadrupedEnv, agent: QuadrupedAgent, rendering: bool, episo
             terminated=terminated,
             truncated=truncated,
         )
-        data_collector.add_state(state)
         data_collector.add_metrics(env.last_reward_components.copy())
 
         episode_reward += reward
@@ -144,6 +144,7 @@ def run_evaluation_episode(agent: QuadrupedAgent, env: QuadrupedEnv):
         "eval_too_high": 1.0 if event_flags["too_high"] else 0.0,
         "eval_critical_tilt": 1.0 if event_flags["critical_tilt"] else 0.0,
         "eval_joint_limit_timeout": 1.0 if event_flags["joint_limit_timeout"] else 0.0,
+        "eval_airborne": 1.0 if event_flags["airborne"] else 0.0,
     }
     return eval_metrics
 
