@@ -111,9 +111,16 @@ class EnvStateFeaturesTest(unittest.TestCase):
         np.testing.assert_allclose(components["gravity_body"], np.array([0.0, -1.0, 0.0], dtype=np.float32), atol=1e-6)
         np.testing.assert_allclose(components["task_forward_body"], np.array([0.0, 0.0, -1.0], dtype=np.float32), atol=1e-6)
         np.testing.assert_allclose(components["linear_velocity_task"], expected_task_velocity, atol=1e-6)
+        expected_joint_limit_fraction = np.concatenate(
+            [
+                np.abs(quadruped.shoulder_angles) / (np.pi / 2.0),
+                np.abs(quadruped.elbow_angles) / (np.pi / 2.0),
+            ],
+            dtype=np.float32,
+        )
         np.testing.assert_allclose(
             components["joint_limit_fraction"],
-            np.zeros(8, dtype=np.float32),
+            expected_joint_limit_fraction,
             atol=1e-6,
         )
 
@@ -142,8 +149,11 @@ class EnvStateFeaturesTest(unittest.TestCase):
         np.testing.assert_allclose(env.quadruped.shoulder_velocities, np.zeros(4))
         np.testing.assert_allclose(env.quadruped.elbow_velocities, np.zeros(4))
 
-        self.assertLessEqual(float(np.abs(env.quadruped.shoulder_angles).max()), RESET_JOINT_ANGLE_JITTER)
-        self.assertLessEqual(float(np.abs(env.quadruped.elbow_angles).max()), RESET_JOINT_ANGLE_JITTER)
+        shoulder_jitter = np.abs(env.quadruped.shoulder_angles - env.quadruped.initial_shoulder_angles)
+        elbow_jitter = np.abs(env.quadruped.elbow_angles - env.quadruped.initial_elbow_angles)
+
+        self.assertLessEqual(float(shoulder_jitter.max()), RESET_JOINT_ANGLE_JITTER)
+        self.assertLessEqual(float(elbow_jitter.max()), RESET_JOINT_ANGLE_JITTER)
         self.assertAlmostEqual(float(env.quadruped.rotation[0]), 0.0, places=6)
         self.assertLessEqual(abs(float(env.quadruped.rotation[1])), RESET_VERTICAL_AXIS_ROTATION_JITTER)
         self.assertAlmostEqual(float(env.quadruped.rotation[2]), 0.0, places=6)

@@ -3,6 +3,7 @@ import numpy as np
 import pygame
 from ..core.config import *
 from ..rendering.camera import Camera3D
+from .quadruped_calibration import INITIAL_ELBOW_ANGLES, INITIAL_SHOULDER_ANGLES
 import copy
 import math
 
@@ -59,10 +60,10 @@ class Quadruped:
 
         # Articulations (épaules et coudes) - angles en radians
         # Épaules: 0=Front Right, 1=Front Left, 2=Back Right, 3=Back Left
-        self.shoulder_angles = np.array([0.0, 0.0, 0.0, 0.0])
+        self.shoulder_angles = INITIAL_SHOULDER_ANGLES.copy()
         self.shoulder_velocities = np.array([0.0, 0.0, 0.0, 0.0])
         # Coudes: 0=Front Right, 1=Front Left, 2=Back Right, 3=Back Left
-        self.elbow_angles = np.array([0.0, 0.0, 0.0, 0.0])
+        self.elbow_angles = INITIAL_ELBOW_ANGLES.copy()
         self.elbow_velocities = np.array([0.0, 0.0, 0.0, 0.0])
         
         # Angles initiaux
@@ -140,16 +141,26 @@ class Quadruped:
             RESET_VERTICAL_AXIS_ROTATION_JITTER,
         )
         self.orientation = self._euler_to_quaternion(self.rotation)
-        self.shoulder_angles = np.random.uniform(
-            -RESET_JOINT_ANGLE_JITTER,
-            RESET_JOINT_ANGLE_JITTER,
-            size=4,
-        ).astype(np.float64)
-        self.elbow_angles = np.random.uniform(
-            -RESET_JOINT_ANGLE_JITTER,
-            RESET_JOINT_ANGLE_JITTER,
-            size=4,
-        ).astype(np.float64)
+        self.shoulder_angles = np.clip(
+            self.initial_shoulder_angles
+            + np.random.uniform(
+                -RESET_JOINT_ANGLE_JITTER,
+                RESET_JOINT_ANGLE_JITTER,
+                size=4,
+            ).astype(np.float64),
+            -math.pi / 2,
+            math.pi / 2,
+        )
+        self.elbow_angles = np.clip(
+            self.initial_elbow_angles
+            + np.random.uniform(
+                -RESET_JOINT_ANGLE_JITTER,
+                RESET_JOINT_ANGLE_JITTER,
+                size=4,
+            ).astype(np.float64),
+            -math.pi / 2,
+            math.pi / 2,
+        )
         self.shoulder_velocities = self.initial_shoulder_velocities.copy()
         self.elbow_velocities = self.initial_elbow_velocities.copy()
         self.last_local_articulation_velocities = np.zeros((len(self.vertices), 3), dtype=np.float64)

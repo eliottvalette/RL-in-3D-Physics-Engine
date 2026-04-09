@@ -37,17 +37,17 @@ const ROOT_OFFSET: Vec3 = [0, 0, 0];
 const BODY_CENTER_OFFSET: Vec3 = [0, -0.05, 0.15];
 
 const BODY_SIZE: Vec3 = [5.7461, 1.938, 12.0739];
-const UPPER_LEG_SIZE: Vec3 = [1.5144, 3.9, 1.6753];
+const UPPER_LEG_SIZE: Vec3 = [1.3, 3.9, 1.6753];
 const LOWER_LEG_SIZE: Vec3 = [0.752, 4.6, 1.1237];
 
 const SHOULDER_ANGLE_SIGN = -1;
 const ELBOW_ANGLE_SIGN = -1;
 
-const FRONT_SHOULDER_X = 2.87;
+const FRONT_SHOULDER_X = 2.77;
 const FRONT_SHOULDER_Y = 0.55;
 const FRONT_SHOULDER_Z = 4.95;
 
-const BACK_SHOULDER_X = 2.87;
+const BACK_SHOULDER_X = 2.77;
 const BACK_SHOULDER_Y = 0.55;
 const BACK_SHOULDER_Z = 5.3;
 
@@ -58,11 +58,11 @@ const ELBOW_X = 0.7572;
 const ELBOW_Y = -4.2;
 const ELBOW_Z = -0.15;
 
-const FRONT_LOWER_CENTER_X = 1.1332;
+const FRONT_LOWER_CENTER_X = 1.0332;
 const FRONT_LOWER_CENTER_Y = -2.5;
 const FRONT_LOWER_CENTER_Z = -0.2;
 
-const BACK_LOWER_CENTER_X = 1.1332;
+const BACK_LOWER_CENTER_X = 1.0332;
 const BACK_LOWER_CENTER_Y = -2.53735;
 const BACK_LOWER_CENTER_Z = 0;
 
