@@ -24,6 +24,10 @@ export function RobotRigDebug({
       <h3>Box calibration</h3>
       <div className="debug-list">
         <div className="debug-item">
+          <strong>modelScale</strong>
+          <code>{calibration.modelScale}</code>
+        </div>
+        <div className="debug-item">
           <strong>bodySize</strong>
           <code>{JSON.stringify(calibration.bodySize)}</code>
         </div>
@@ -38,6 +42,10 @@ export function RobotRigDebug({
         <div className="debug-item">
           <strong>bodyCenterOffset</strong>
           <code>{JSON.stringify(calibration.bodyCenterOffset)}</code>
+        </div>
+        <div className="debug-item">
+          <strong>shoulderAngleSign / elbowAngleSign</strong>
+          <code>{calibration.shoulderAngleSign} / {calibration.elbowAngleSign}</code>
         </div>
       </div>
 

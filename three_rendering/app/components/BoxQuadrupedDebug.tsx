@@ -31,14 +31,41 @@ function DebugLeg({
   anchor,
   upperLegSize,
   lowerLegSize,
+  upperLegCenterOffset,
+  elbowOffset,
+  lowerLegCenterOffset,
+  upperLegRestAxisAngle,
+  lowerLegRestAxisAngle,
   groupsRef,
 }: {
   legName: BoxLegName;
   anchor: [number, number, number];
   upperLegSize: [number, number, number];
   lowerLegSize: [number, number, number];
+  upperLegCenterOffset: [number, number, number];
+  elbowOffset: [number, number, number];
+  lowerLegCenterOffset: [number, number, number];
+  upperLegRestAxisAngle: { axis: [number, number, number]; angle: number };
+  lowerLegRestAxisAngle: { axis: [number, number, number]; angle: number };
   groupsRef: React.MutableRefObject<Record<string, THREE.Group | null>>;
 }) {
+  const upperLegQuaternion = useMemo(
+    () =>
+      new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(...upperLegRestAxisAngle.axis),
+        upperLegRestAxisAngle.angle,
+      ),
+    [upperLegRestAxisAngle],
+  );
+  const lowerLegQuaternion = useMemo(
+    () =>
+      new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(...lowerLegRestAxisAngle.axis),
+        lowerLegRestAxisAngle.angle,
+      ),
+    [lowerLegRestAxisAngle],
+  );
+
   return (
     <group position={anchor}>
       <group
@@ -46,20 +73,24 @@ function DebugLeg({
           groupsRef.current[LEG_TO_JOINTS[legName].shoulder] = node;
         }}
       >
-        <mesh position={[0, -upperLegSize[1] / 2, 0]}>
-          <boxGeometry args={upperLegSize} />
-          <meshBasicMaterial color="#ffffff" wireframe transparent opacity={0.65} />
-        </mesh>
+        <group quaternion={upperLegQuaternion}>
+          <mesh position={upperLegCenterOffset}>
+            <boxGeometry args={upperLegSize} />
+            <meshBasicMaterial color="#ffffff" wireframe transparent opacity={0.65} />
+          </mesh>
+        </group>
         <group
-          position={[0, -upperLegSize[1], 0]}
+          position={elbowOffset}
           ref={(node) => {
             groupsRef.current[LEG_TO_JOINTS[legName].elbow] = node;
           }}
         >
-          <mesh position={[0, -lowerLegSize[1] / 2, 0]}>
-            <boxGeometry args={lowerLegSize} />
-            <meshBasicMaterial color="#d9d9d9" wireframe transparent opacity={0.65} />
-          </mesh>
+          <group quaternion={lowerLegQuaternion}>
+            <mesh position={lowerLegCenterOffset}>
+              <boxGeometry args={lowerLegSize} />
+              <meshBasicMaterial color="#d9d9d9" wireframe transparent opacity={0.65} />
+            </mesh>
+          </group>
         </group>
       </group>
     </group>
@@ -101,17 +132,17 @@ export function BoxQuadrupedDebug({
       const shoulderGroup = jointGroupsRef.current[joints.shoulder];
       const elbowGroup = jointGroupsRef.current[joints.elbow];
       if (shoulderGroup) {
-        shoulderGroup.rotation.x = frame.joints[joints.shoulder];
+        shoulderGroup.rotation.x = calibration.shoulderAngleSign * frame.joints[joints.shoulder];
       }
       if (elbowGroup) {
-        elbowGroup.rotation.x = frame.joints[joints.elbow];
+        elbowGroup.rotation.x = calibration.elbowAngleSign * frame.joints[joints.elbow];
       }
     }
   });
 
   return (
     <group ref={rootRef}>
-      <group ref={bodyAssemblyRef}>
+      <group ref={bodyAssemblyRef} scale={calibration.modelScale}>
         <mesh>
           <boxGeometry args={calibration.bodySize} />
           <meshBasicMaterial color="#f5f5f5" wireframe transparent opacity={0.75} />
@@ -123,6 +154,11 @@ export function BoxQuadrupedDebug({
             anchor={anchor}
             upperLegSize={calibration.upperLegSize}
             lowerLegSize={calibration.lowerLegSize}
+            upperLegCenterOffset={calibration.upperLegCenterOffsets[legName]}
+            elbowOffset={calibration.elbowOffsets[legName]}
+            lowerLegCenterOffset={calibration.lowerLegCenterOffsets[legName]}
+            upperLegRestAxisAngle={calibration.upperLegRestAxisAngle[legName]}
+            lowerLegRestAxisAngle={calibration.lowerLegRestAxisAngle[legName]}
             groupsRef={jointGroupsRef}
           />
         ))}
