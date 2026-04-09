@@ -1,0 +1,14 @@
+{
+  "armatureName": "Armature",
+  "rootBoneName": "Bone",
+  "joints": {
+    "front_left_shoulder": { "boneName": "Bone_L.001", "axis": "x", "sign": 1, "restAngle": 0.0 },
+    "front_left_elbow": { "boneName": "Bone_L.003", "axis": "x", "sign": 1, "restAngle": 0.0 },
+    "front_right_shoulder": { "boneName": "Bone_R.001", "axis": "x", "sign": 1, "restAngle": 0.0 },
+    "front_right_elbow": { "boneName": "Bone_R.003", "axis": "x", "sign": 1, "restAngle": 0.0 },
+    "back_left_shoulder": { "boneName": "Bone_R.006", "axis": "x", "sign": 1, "restAngle": 0.0 },
+    "back_left_elbow": { "boneName": "Bone_R.008", "axis": "x", "sign": 1, "restAngle": 0.0 },
+    "back_right_shoulder": { "boneName": "Bone_L.006", "axis": "x", "sign": 1, "restAngle": 0.0 },
+    "back_right_elbow": { "boneName": "Bone_L.008", "axis": "x", "sign": 1, "restAngle": 0.0 }
+  }
+}

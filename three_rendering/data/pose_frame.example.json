@@ -1,0 +1,14 @@
+{
+  "root_position": [0.0, 0.0, 0.0],
+  "root_quaternion": [0.0, 0.0, 0.0, 1.0],
+  "joints": {
+    "front_left_shoulder": 0.12,
+    "front_left_elbow": 0.38,
+    "front_right_shoulder": -0.12,
+    "front_right_elbow": -0.38,
+    "back_left_shoulder": -0.12,
+    "back_left_elbow": -0.38,
+    "back_right_shoulder": 0.12,
+    "back_right_elbow": 0.38
+  }
+}
