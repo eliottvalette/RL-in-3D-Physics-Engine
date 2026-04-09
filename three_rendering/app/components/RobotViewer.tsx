@@ -74,18 +74,18 @@ export function RobotViewer() {
   }, []);
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%" }}>
+    <div className="viewer-shell" style={{ position: "relative", width: "100%", height: "100%" }}>
       <div className="viewer-overlay">
         <p>{streamConnected ? "Bridge connected" : "Mock pose loop"}</p>
       </div>
       <Canvas shadows camera={{ position: [10, 8, 12], fov: 42 }}>
-        <color attach="background" args={["#06080f"]} />
-        <ambientLight intensity={0.8} />
-        <directionalLight position={[8, 12, 6]} intensity={2.2} castShadow />
+        <color attach="background" args={["#000000"]} />
+        <ambientLight intensity={0.9} />
+        <directionalLight position={[8, 12, 6]} intensity={2.4} castShadow />
         <Grid
           args={[30, 30]}
-          sectionColor="#1f3555"
-          cellColor="#142134"
+          sectionColor="#2f2f2f"
+          cellColor="#1a1a1a"
           fadeDistance={42}
           fadeStrength={1}
           position={[0, -4.6, 0]}

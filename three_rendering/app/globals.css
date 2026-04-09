@@ -1,11 +1,11 @@
 :root {
-  --background: #06080f;
-  --surface: #0b1220;
-  --surface-2: #101a2b;
-  --border: #22304a;
-  --text: #e5edf8;
-  --muted: #8da0bf;
-  --accent: #6fd3ff;
+  --background: #000000;
+  --surface: #080808;
+  --surface-2: #111111;
+  --border: #2a2a2a;
+  --text: #f5f5f5;
+  --muted: #a6a6a6;
+  --accent: #ffffff;
 }
 
 * {
@@ -15,10 +15,16 @@
 html,
 body {
   margin: 0;
-  min-height: 100%;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
   background: var(--background);
   color: var(--text);
   font-family: var(--font-geist-sans), Arial, sans-serif;
+}
+
+body {
+  overscroll-behavior: none;
 }
 
 a {
@@ -33,12 +39,17 @@ select {
 }
 
 .page-shell {
-  min-height: 100vh;
-  padding: 24px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  width: 100vw;
+  height: 100vh;
+  padding: 16px;
+  overflow: hidden;
 }
 
 .hero {
-  margin-bottom: 20px;
+  min-height: 0;
 }
 
 .eyebrow {
@@ -49,38 +60,59 @@ select {
 }
 
 .hero h1 {
-  margin: 0 0 10px;
-  font-size: 32px;
+  margin: 0 0 8px;
+  font-size: 28px;
   line-height: 1.1;
 }
 
 .lede {
   margin: 0;
-  max-width: 760px;
+  max-width: 720px;
   color: var(--muted);
+  font-size: 14px;
 }
 
 .viewer-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.8fr) minmax(320px, 0.8fr);
-  gap: 16px;
-  align-items: start;
+  gap: 12px;
+  min-height: 0;
+  height: 100%;
+  align-items: stretch;
 }
 
 .viewer-panel,
 .debug-panel {
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: linear-gradient(180deg, rgba(16, 26, 43, 0.92), rgba(11, 18, 32, 0.92));
+  background: var(--surface);
 }
 
 .viewer-panel {
-  min-height: 680px;
+  min-height: 0;
   overflow: hidden;
+  height: 100%;
+  position: relative;
+}
+
+.viewer-panel > div {
+  width: 100%;
+  height: 100%;
+}
+
+.viewer-panel canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .debug-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
   padding: 16px;
+  overflow: hidden;
 }
 
 .debug-panel h2,
@@ -96,13 +128,15 @@ select {
 .debug-list {
   display: grid;
   gap: 8px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .debug-item {
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(9, 14, 25, 0.7);
+  background: var(--surface-2);
 }
 
 .debug-item strong {
@@ -111,7 +145,7 @@ select {
 }
 
 .debug-item code {
-  color: #c3e7ff;
+  color: var(--text);
 }
 
 .viewer-overlay {
@@ -120,9 +154,9 @@ select {
   left: 12px;
   z-index: 2;
   padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
-  background: rgba(6, 8, 15, 0.75);
+  background: rgba(0, 0, 0, 0.78);
   backdrop-filter: blur(8px);
 }
 
@@ -138,6 +172,6 @@ select {
   }
 
   .viewer-panel {
-    min-height: 560px;
+    min-height: 0;
   }
 }
