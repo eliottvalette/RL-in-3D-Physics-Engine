@@ -5,6 +5,7 @@ import numpy as np
 
 from physics_env.core.config import (
     ANGULAR_VELOCITY_PENALTY_COEF,
+    HEIGHT_SOFT_REWARD_MARGIN,
     MAX_AIRBORNE_STEPS,
     JOINT_LIMIT_THRESHOLD,
     MAX_BODY_HEIGHT,
@@ -12,6 +13,7 @@ from physics_env.core.config import (
     MIN_BODY_HEIGHT,
     PROGRESS_REWARD_COEF,
     CRITICAL_TILT_ANGLE,
+    TILT_SOFT_REWARD_MARGIN,
     TERMINAL_PENALTY_CRITICAL_TILT,
     TERMINAL_PENALTY_AIRBORNE,
     TERMINAL_PENALTY_JOINT_LIMIT_TIMEOUT,
@@ -90,7 +92,27 @@ class TerminalRewardsTest(unittest.TestCase):
 
         self.assertFalse(done)
         self.assertEqual(env.last_done_reason, "running")
-        self.assertAlmostEqual(reward, PROGRESS_REWARD_COEF * 0.02, places=6)
+        self.assertGreater(reward, 0.0)
+        self.assertLess(reward, PROGRESS_REWARD_COEF * 0.02)
+
+    def test_near_critical_tilt_softly_reduces_progress_reward(self):
+        env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
+        _set_ground_contact(env)
+        env.prev_potential = 0.0
+        env.quadruped.position[2] = -0.02
+        target_tilt = CRITICAL_TILT_ANGLE - 0.5 * TILT_SOFT_REWARD_MARGIN
+        env.quadruped.orientation = env.quadruped._euler_to_quaternion(
+            np.array([0.0, 0.0, target_tilt])
+        )
+        env.quadruped.sync_euler_from_orientation()
+
+        with _freeze_physics():
+            _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
+
+        self.assertFalse(done)
+        self.assertAlmostEqual(env.last_reward_components["tilt_reward_scale"], 0.5, places=6)
+        self.assertAlmostEqual(env.last_reward_components["locomotion_reward"], PROGRESS_REWARD_COEF * 0.01, places=6)
+        self.assertAlmostEqual(reward, PROGRESS_REWARD_COEF * 0.01, places=6)
 
     def test_terminal_failure_keeps_only_terminal_penalty(self):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
@@ -143,6 +165,21 @@ class TerminalRewardsTest(unittest.TestCase):
         )
         self.assertAlmostEqual(env.last_reward_components["forward_speed"], 0.5, places=6)
         self.assertAlmostEqual(reward, env.last_reward_components["distance_reward"], places=6)
+
+    def test_near_low_height_limit_softly_reduces_progress_reward(self):
+        env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
+        _set_ground_contact(env)
+        env.prev_potential = 0.0
+        env.quadruped.position[2] = -0.02
+        env.quadruped.position[1] = MIN_BODY_HEIGHT + 0.5 * HEIGHT_SOFT_REWARD_MARGIN
+
+        with _freeze_physics():
+            _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
+
+        self.assertFalse(done)
+        self.assertAlmostEqual(env.last_reward_components["height_reward_scale"], 0.5, places=6)
+        self.assertAlmostEqual(env.last_reward_components["locomotion_reward"], PROGRESS_REWARD_COEF * 0.01, places=6)
+        self.assertAlmostEqual(reward, PROGRESS_REWARD_COEF * 0.01, places=6)
 
     def test_forward_progress_without_recent_contact_does_not_pay(self):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)

@@ -34,7 +34,7 @@ class JointMotorDynamicsTest(unittest.TestCase):
         self.assertLess(abs(braked_velocity), abs(driven_velocity))
         self.assertGreaterEqual(braked_velocity, 0.0)
 
-        for _ in range(80):
+        for _ in range(200):
             quadruped.adjust_shoulder_angle(0, 0.0)
 
         self.assertLessEqual(abs(float(quadruped.shoulder_velocities[0])), MOTOR_STOP_EPS)

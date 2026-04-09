@@ -63,6 +63,7 @@ RESET_VERTICAL_AXIS_ROTATION_JITTER = np.deg2rad(9.0)
 
 # --- Contraintes RL ----------------------------------------------------
 CRITICAL_TILT_ANGLE = np.deg2rad(20.0)
+TILT_SOFT_REWARD_MARGIN = np.deg2rad(8.0)
 JOINT_LIMIT_THRESHOLD = np.pi / 2 * 0.9
 MAX_CONSECUTIVE_JOINT_LIMIT_STEPS = 200
 TERMINAL_PENALTY_TOO_HIGH = -2.5
@@ -76,6 +77,7 @@ MAX_AIRBORNE_STEPS = 25
 ANGULAR_VELOCITY_PENALTY_COEF = 0.005
 MIN_BODY_HEIGHT = 4.5
 MAX_BODY_HEIGHT = 5.5
+HEIGHT_SOFT_REWARD_MARGIN = 0.25
 
 # ----- Debug Physics Simulation --------------------------------------
 DEBUG_CONTACT = False       

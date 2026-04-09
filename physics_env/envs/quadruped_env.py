@@ -95,6 +95,12 @@ class QuadrupedEnv:
         side_tilt = abs(np.arctan2(body_up_world[2], body_up_world[1]))
         return forward_tilt, side_tilt
 
+    @staticmethod
+    def _soft_reward_scale(distance_to_failure, soft_margin):
+        if soft_margin <= 0.0:
+            return 1.0 if distance_to_failure > 0.0 else 0.0
+        return float(np.clip(distance_to_failure / soft_margin, 0.0, 1.0))
+
     def reset_episode_state(self):
         self.prev_potential = None
         self.cumulative_locomotion_reward = 0.0
@@ -444,9 +450,15 @@ class QuadrupedEnv:
             0,
         )
 
-        tilt_reward_scale = 1.0 if max_tilt <= CRITICAL_TILT_ANGLE else 0.0
-        height_reward_scale = 1.0 if MIN_BODY_HEIGHT <= body_height <= MAX_BODY_HEIGHT else 0.0
-        raw_pose_scale = tilt_reward_scale * height_reward_scale
+        tilt_reward_scale = self._soft_reward_scale(
+            CRITICAL_TILT_ANGLE - max_tilt,
+            TILT_SOFT_REWARD_MARGIN,
+        )
+        height_reward_scale = self._soft_reward_scale(
+            body_height - MIN_BODY_HEIGHT,
+            HEIGHT_SOFT_REWARD_MARGIN,
+        )
+        raw_pose_scale = min(tilt_reward_scale, height_reward_scale)
         locomotion_reward_scale = raw_pose_scale
 
         joint_limit_timeout = (
@@ -483,7 +495,7 @@ class QuadrupedEnv:
         # ----------  d)  Somme finale -------------------------
         # Objectif: le progres ne compte que dans un regime de locomotion au sol.
         # Une petite penalite de vitesse angulaire limite les oscillations du body.
-        locomotion_reward = distance_reward if not done else 0.0
+        locomotion_reward = (distance_reward * locomotion_reward_scale) if not done else 0.0
         if done:
             reward = terminal_event_reward
         else:
