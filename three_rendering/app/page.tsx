@@ -1,6 +1,7 @@
 import { RobotRigDebug } from "./components/RobotRigDebug";
 import { RobotViewer } from "./components/RobotViewer";
 import { DEFAULT_RIG_MAP } from "@/lib/robotRigMap";
+import { DEFAULT_BOX_QUADRUPED_CALIBRATION } from "@/lib/boxQuadrupedConfig";
 
 export default function Home() {
   return (
@@ -21,7 +22,10 @@ export default function Home() {
           <RobotViewer />
         </div>
         <aside className="debug-panel">
-          <RobotRigDebug rigMap={DEFAULT_RIG_MAP} />
+          <RobotRigDebug
+            rigMap={DEFAULT_RIG_MAP}
+            calibration={DEFAULT_BOX_QUADRUPED_CALIBRATION}
+          />
         </aside>
       </section>
     </main>

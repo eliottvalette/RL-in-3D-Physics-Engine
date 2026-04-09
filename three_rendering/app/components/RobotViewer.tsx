@@ -5,6 +5,7 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { Grid, Html, OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
+import { BoxQuadrupedDebug } from "./BoxQuadrupedDebug";
 import { bindRobotRig, applyPoseFrame } from "@/lib/robotModel";
 import { buildMockPoseFrame, type RobotPoseFrame } from "@/lib/robotPose";
 import { DEFAULT_RIG_MAP } from "@/lib/robotRigMap";
@@ -32,6 +33,15 @@ function RobotScene({ poseFrame, useMockPose }: RobotSceneProps) {
       if (mesh.isMesh) {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        materials.forEach((material) => {
+          if (material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshPhongMaterial) {
+            material.color.set("#cfcfcf");
+          }
+        });
+        if (!Array.isArray(mesh.material) && mesh.material instanceof THREE.MeshBasicMaterial) {
+          mesh.material.color.set("#cfcfcf");
+        }
       }
     });
   }, [clonedScene]);
@@ -93,6 +103,7 @@ export function RobotViewer() {
         <axesHelper args={[3]} />
         <Suspense fallback={<Html center>Loading GLB…</Html>}>
           <RobotScene poseFrame={poseFrame} useMockPose={useMockPose} />
+          <BoxQuadrupedDebug poseFrame={poseFrame} useMockPose={useMockPose} />
         </Suspense>
         <OrbitControls makeDefault />
       </Canvas>
