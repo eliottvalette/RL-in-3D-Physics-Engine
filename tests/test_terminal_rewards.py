@@ -6,19 +6,20 @@ import numpy as np
 from physics_env.core.config import (
     ANGULAR_VELOCITY_PENALTY_COEF,
     HEIGHT_SOFT_REWARD_MARGIN,
+    CRITICAL_TILT_ANGLE,
+    TERMINAL_PENALTY_AIRBORNE,
+    HEIGHT_SOFT_REWARD_MARGIN,
     MAX_AIRBORNE_STEPS,
-    JOINT_LIMIT_THRESHOLD,
     MAX_BODY_HEIGHT,
     MAX_CONSECUTIVE_JOINT_LIMIT_STEPS,
     MIN_BODY_HEIGHT,
     PROGRESS_REWARD_COEF,
-    CRITICAL_TILT_ANGLE,
-    TILT_SOFT_REWARD_MARGIN,
+    SHOULDER_ANGLE_MAX,
     TERMINAL_PENALTY_CRITICAL_TILT,
-    TERMINAL_PENALTY_AIRBORNE,
     TERMINAL_PENALTY_JOINT_LIMIT_TIMEOUT,
     TERMINAL_PENALTY_TOO_HIGH,
     TERMINAL_PENALTY_TOO_LOW,
+    TILT_SOFT_REWARD_MARGIN,
 )
 from physics_env.envs.quadruped_env import QuadrupedEnv
 
@@ -134,11 +135,11 @@ class TerminalRewardsTest(unittest.TestCase):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
         env.prev_potential = 0.0
         env.quadruped.position[2] = -0.5
-        env.quadruped.shoulder_angles[0] = JOINT_LIMIT_THRESHOLD + 0.05
+        env.quadruped.shoulder_angles[0] = SHOULDER_ANGLE_MAX
         env.consecutive_shoulder_limit_steps[0] = MAX_CONSECUTIVE_JOINT_LIMIT_STEPS
 
         with _freeze_physics():
-            _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
+            _, reward, done, _ = env.step([1, 0, 0, 0], [0, 0, 0, 0])
 
         self.assertTrue(done)
         self.assertEqual(env.last_done_reason, "joint_limit_timeout")

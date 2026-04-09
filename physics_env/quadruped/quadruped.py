@@ -35,6 +35,23 @@ def _quat_multiply(q1, q2):
     ], dtype=np.float64)
 
 
+def _clip_angle(angle, angle_min, angle_max):
+    return max(float(angle_min), min(float(angle_max), float(angle)))
+
+
+def _joint_limit_fraction(angles, angle_min, angle_max):
+    angles = np.asarray(angles, dtype=np.float64)
+    fractions = np.zeros_like(angles, dtype=np.float64)
+    positive_mask = angles >= 0.0
+
+    if angle_max > 0.0:
+        fractions[positive_mask] = angles[positive_mask] / float(angle_max)
+    if angle_min < 0.0:
+        fractions[~positive_mask] = angles[~positive_mask] / float(angle_min)
+
+    return np.clip(fractions, 0.0, 1.0)
+
+
 class Quadruped:
     def __init__(self, position, vertices, vertices_dict, rotation = np.array([0.0, 0.0, 0.0]), velocity = np.array([0.0, 0.0, 0.0]), color = (255, 255, 255)):
         self.initial_position = position.copy()
@@ -148,8 +165,8 @@ class Quadruped:
                 RESET_JOINT_ANGLE_JITTER,
                 size=4,
             ).astype(np.float64),
-            -math.pi / 2,
-            math.pi / 2,
+            SHOULDER_ANGLE_MIN,
+            SHOULDER_ANGLE_MAX,
         )
         self.elbow_angles = np.clip(
             self.initial_elbow_angles
@@ -158,8 +175,8 @@ class Quadruped:
                 RESET_JOINT_ANGLE_JITTER,
                 size=4,
             ).astype(np.float64),
-            -math.pi / 2,
-            math.pi / 2,
+            ELBOW_ANGLE_MIN,
+            ELBOW_ANGLE_MAX,
         )
         self.shoulder_velocities = self.initial_shoulder_velocities.copy()
         self.elbow_velocities = self.initial_elbow_velocities.copy()
@@ -436,8 +453,8 @@ class Quadruped:
         )
         joint_limit_fraction = np.concatenate(
             [
-                np.abs(self.shoulder_angles) / (math.pi / 2.0),
-                np.abs(self.elbow_angles) / (math.pi / 2.0),
+                _joint_limit_fraction(self.shoulder_angles, SHOULDER_ANGLE_MIN, SHOULDER_ANGLE_MAX),
+                _joint_limit_fraction(self.elbow_angles, ELBOW_ANGLE_MIN, ELBOW_ANGLE_MAX),
             ],
             dtype=np.float64,
         )
@@ -467,16 +484,16 @@ class Quadruped:
         }
 
     def set_shoulder_angle(self, leg_index, angle):
-        capped_angle = max(-math.pi/2, min(math.pi/2, angle))
+        capped_angle = _clip_angle(angle, SHOULDER_ANGLE_MIN, SHOULDER_ANGLE_MAX)
         self.shoulder_angles[leg_index] = capped_angle
         self._needs_update = True
     
     def set_elbow_angle(self, leg_index, angle):
-        capped_angle = max(-math.pi/2, min(math.pi/2, angle))
+        capped_angle = _clip_angle(angle, ELBOW_ANGLE_MIN, ELBOW_ANGLE_MAX)
         self.elbow_angles[leg_index] = capped_angle
         self._needs_update = True
 
-    def _update_joint_motor(self, angles, velocities, leg_index, target_speed):
+    def _update_joint_motor(self, angles, velocities, leg_index, target_speed, angle_min, angle_max):
         target_speed = float(target_speed)
         ease_factor = 1.0 - float(np.clip(MOTOR_DIFFICULTY, 0.0, 1.0))
         if abs(target_speed) > 1e-9:
@@ -498,13 +515,13 @@ class Quadruped:
             current_velocity = 0.0
 
         new_angle = angles[leg_index] + current_velocity
-        capped_angle = max(-math.pi / 2, min(math.pi / 2, new_angle))
+        capped_angle = _clip_angle(new_angle, angle_min, angle_max)
         angles[leg_index] = capped_angle
 
         if (
-            capped_angle >= math.pi / 2 and current_velocity > 0.0
+            capped_angle >= angle_max and current_velocity > 0.0
         ) or (
-            capped_angle <= -math.pi / 2 and current_velocity < 0.0
+            capped_angle <= angle_min and current_velocity < 0.0
         ):
             current_velocity = 0.0
 
@@ -517,6 +534,8 @@ class Quadruped:
             velocities=self.shoulder_velocities,
             leg_index=leg_index,
             target_speed=delta_angle,
+            angle_min=SHOULDER_ANGLE_MIN,
+            angle_max=SHOULDER_ANGLE_MAX,
         )
     
     def adjust_elbow_angle(self, leg_index, delta_angle):
@@ -525,6 +544,8 @@ class Quadruped:
             velocities=self.elbow_velocities,
             leg_index=leg_index,
             target_speed=delta_angle,
+            angle_min=ELBOW_ANGLE_MIN,
+            angle_max=ELBOW_ANGLE_MAX,
         )
     
     def get_state(self):

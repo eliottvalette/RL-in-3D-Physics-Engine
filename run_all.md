@@ -1,3 +1,10 @@
+# Update the last best model
+```bash
+clear
+rm -rf saved_models/quadruped_agent.pth
+mv saved_models/quadruped_agent_epoch_1999.pth saved_models/quadruped_agent.pth
+```
+
 # Run all the physics environments
 ```bash
 clear

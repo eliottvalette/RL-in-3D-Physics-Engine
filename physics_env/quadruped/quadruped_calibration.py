@@ -23,7 +23,7 @@ BODY_CENTER_OFFSET = _scaled_vec3([0.0, -0.05, 0.15])
 BODY_SIZE = _scaled_vec3([5.7461, 1.938, 12.0739])  # x, y, z
 
 UPPER_LEG_SIZE = _scaled_vec3([1.3, 3.9, 1.6753])  # x, y, z
-LOWER_LEG_SIZE = _scaled_vec3([0.752, 4.6, 1.1237])  # x, y, z
+LOWER_LEG_SIZE = _scaled_vec3([0.752, 4.9, 1.1237])  # x, y, z
 
 
 # Quadruped leg order in Python:
@@ -52,13 +52,13 @@ ELBOW_OFFSETS = (
 )
 
 LOWER_LEG_CENTER_OFFSETS = (
-    _scaled_vec3([1.0332, -2.5, -0.2]),
-    _scaled_vec3([-1.0332, -2.5, -0.2]),
-    _scaled_vec3([1.0332, -2.53735, 0.0]),
-    _scaled_vec3([-1.0332, -2.53735, 0.0]),
+    _scaled_vec3([1.1, -2.4, -0.2]),
+    _scaled_vec3([-1.1, -2.4, -0.2]),
+    _scaled_vec3([1.1, -2.4, 0.0]),
+    _scaled_vec3([-1.1, -2.4, 0.0]),
 )
 
 
 # Python-side rest pose starts from neutral joint angles.
-INITIAL_SHOULDER_ANGLES = np.zeros(4, dtype=np.float64)
-INITIAL_ELBOW_ANGLES = np.zeros(4, dtype=np.float64)
+INITIAL_SHOULDER_ANGLES = np.array([-0.6, -0.6, -0.6, -0.6], dtype=np.float64)
+INITIAL_ELBOW_ANGLES = np.array([1.5, 1.5, 1.5, 1.5], dtype=np.float64)

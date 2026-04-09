@@ -109,6 +109,7 @@ def run_episode(env: QuadrupedEnv, agent: QuadrupedAgent, rendering: bool, episo
         "episode_reward": float(episode_reward),
         "forward_progress": float(max(0.0, -float(env.quadruped.position[2]))),
         "mean_locomotion_reward_scale": float(np.mean(locomotion_scales)) if locomotion_scales else None,
+        "terminal_reason": env.last_done_reason,
     }
     summary.update(_event_metrics(event_flags))
 
@@ -165,6 +166,7 @@ def main_training_loop(agent: QuadrupedAgent, episodes: int, rendering: bool, re
             start_time = time.time()
 
             episode_summary = run_episode(env, agent, rendering, episode, render_every, data_collector)
+            terminal_reason = str(episode_summary.pop("terminal_reason", "running"))
 
             if EVAL_INTERVAL > 0 and (episode + 1) % EVAL_INTERVAL == 0:
                 eval_summaries = [run_evaluation_episode(agent, eval_env) for _ in range(EVAL_EPISODES)]
@@ -177,6 +179,7 @@ def main_training_loop(agent: QuadrupedAgent, episodes: int, rendering: bool, re
             print(f"[TRAIN] Steps: {int(episode_summary['steps_count'])}")
             print(f"[TRAIN] Reward: {episode_summary['episode_reward']:.3f}")
             print(f"[TRAIN] Progress: {episode_summary['forward_progress']:.3f}")
+            print(f"[TRAIN] Done reason: {terminal_reason}")
             if "eval_episode_reward" in episode_summary:
                 print(
                     "[TRAIN] Eval:",

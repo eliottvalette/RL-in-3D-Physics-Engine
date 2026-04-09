@@ -59,7 +59,7 @@ class QuadrupedEnv:
         self.ground = Ground(size=20)
         self.quadruped_vertices_dict = create_quadruped_vertices()
         self.quadruped = Quadruped(
-            position=np.array([0.0, 5.5, 0.0]),
+            position=np.array([0.0, 4.5, 0.0]),
             vertices=get_quadruped_vertices(),
             vertices_dict=self.quadruped_vertices_dict
         )
@@ -100,6 +100,35 @@ class QuadrupedEnv:
         if soft_margin <= 0.0:
             return 1.0 if distance_to_failure > 0.0 else 0.0
         return float(np.clip(distance_to_failure / soft_margin, 0.0, 1.0))
+
+    @staticmethod
+    def _joint_limit_push_mask(values, actions, angle_min, angle_max):
+        values = np.asarray(values, dtype=np.float64)
+        actions = np.asarray(actions, dtype=np.float64)
+        at_lower_limit = values <= float(angle_min) + JOINT_LIMIT_ANGLE_EPS
+        at_upper_limit = values >= float(angle_max) - JOINT_LIMIT_ANGLE_EPS
+        pushing_lower = actions < 0.0
+        pushing_upper = actions > 0.0
+        return np.logical_or(
+            np.logical_and(at_lower_limit, pushing_lower),
+            np.logical_and(at_upper_limit, pushing_upper),
+        )
+
+    @staticmethod
+    def _compute_joint_limit_penalty(max_push_steps):
+        if max_push_steps <= JOINT_LIMIT_STUCK_GRACE_STEPS:
+            return 0.0
+
+        available_steps = max(1, MAX_CONSECUTIVE_JOINT_LIMIT_STEPS - JOINT_LIMIT_STUCK_GRACE_STEPS)
+        normalized_progress = min(
+            float(max_push_steps - JOINT_LIMIT_STUCK_GRACE_STEPS) / float(available_steps),
+            1.0,
+        )
+        exp_numerator = np.expm1(JOINT_LIMIT_STUCK_EXP_RATE * normalized_progress)
+        exp_denominator = np.expm1(JOINT_LIMIT_STUCK_EXP_RATE)
+        if exp_denominator <= 0.0:
+            return -JOINT_LIMIT_PENALTY_COEF * normalized_progress
+        return -JOINT_LIMIT_PENALTY_COEF * float(exp_numerator / exp_denominator)
 
     def reset_episode_state(self):
         self.prev_potential = None
@@ -357,6 +386,9 @@ class QuadrupedEnv:
                 "height_reward_scale": 1.0,
                 "raw_pose_scale": 1.0,
                 "locomotion_reward_scale": 1.0,
+                "joint_limit_penalty": 0.0,
+                "joint_limit_push_steps_max": 0.0,
+                "joint_limit_push_active": 0.0,
                 "forward_tilt_deg": 0.0,
                 "side_tilt_deg": 0.0,
             }
@@ -437,18 +469,35 @@ class QuadrupedEnv:
         else:
             self.consecutive_steps_critical_tilt = 0
 
-        shoulder_near_limit = np.abs(self.quadruped.shoulder_angles) > JOINT_LIMIT_THRESHOLD
-        elbow_near_limit = np.abs(self.quadruped.elbow_angles) > JOINT_LIMIT_THRESHOLD
+        shoulder_pushing_limit = self._joint_limit_push_mask(
+            self.quadruped.shoulder_angles,
+            shoulder_actions,
+            SHOULDER_ANGLE_MIN,
+            SHOULDER_ANGLE_MAX,
+        )
+        elbow_pushing_limit = self._joint_limit_push_mask(
+            self.quadruped.elbow_angles,
+            elbow_actions,
+            ELBOW_ANGLE_MIN,
+            ELBOW_ANGLE_MAX,
+        )
         self.consecutive_shoulder_limit_steps = np.where(
-            shoulder_near_limit,
+            shoulder_pushing_limit,
             self.consecutive_shoulder_limit_steps + 1,
             0,
         )
         self.consecutive_elbow_limit_steps = np.where(
-            elbow_near_limit,
+            elbow_pushing_limit,
             self.consecutive_elbow_limit_steps + 1,
             0,
         )
+        max_joint_limit_push_steps = int(
+            max(
+                int(self.consecutive_shoulder_limit_steps.max()),
+                int(self.consecutive_elbow_limit_steps.max()),
+            )
+        )
+        joint_limit_penalty = self._compute_joint_limit_penalty(max_joint_limit_push_steps)
 
         tilt_reward_scale = self._soft_reward_scale(
             CRITICAL_TILT_ANGLE - max_tilt,
@@ -499,7 +548,7 @@ class QuadrupedEnv:
         if done:
             reward = terminal_event_reward
         else:
-            reward = locomotion_reward + angular_velocity_penalty
+            reward = locomotion_reward + angular_velocity_penalty + joint_limit_penalty
             self.cumulative_locomotion_reward += locomotion_reward
         self.last_reward_components = {
             "distance_reward": float(distance_reward),
@@ -521,6 +570,9 @@ class QuadrupedEnv:
             "height_reward_scale": float(height_reward_scale),
             "raw_pose_scale": float(raw_pose_scale),
             "locomotion_reward_scale": float(locomotion_reward_scale * (1.0 if grounded_recently else 0.0)),
+            "joint_limit_penalty": float(joint_limit_penalty),
+            "joint_limit_push_steps_max": float(max_joint_limit_push_steps),
+            "joint_limit_push_active": 1.0 if max_joint_limit_push_steps > 0 else 0.0,
             "forward_tilt_deg": float(np.degrees(forward_tilt)),
             "side_tilt_deg": float(np.degrees(side_tilt)),
         }

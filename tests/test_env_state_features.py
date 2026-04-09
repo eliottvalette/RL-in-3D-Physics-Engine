@@ -2,14 +2,23 @@ import unittest
 import numpy as np
 
 from physics_env.core.config import (
+    ELBOW_ANGLE_MAX,
+    ELBOW_ANGLE_MIN,
+    JOINT_LIMIT_STUCK_EXP_RATE,
+    JOINT_LIMIT_STUCK_GRACE_STEPS,
+    JOINT_LIMIT_PENALTY_COEF,
+    MAX_BODY_HEIGHT,
     MAX_AIRBORNE_STEPS,
     MAX_CONSECUTIVE_JOINT_LIMIT_STEPS,
+    MIN_BODY_HEIGHT,
     RESET_JOINT_ANGLE_JITTER,
     RESET_VERTICAL_AXIS_ROTATION_JITTER,
+    SHOULDER_ANGLE_MAX,
+    SHOULDER_ANGLE_MIN,
     STATE_SIZE,
 )
 from physics_env.envs.quadruped_env import QuadrupedEnv
-from physics_env.quadruped.quadruped import QUADRUPED_TOTAL_MASS, Quadruped
+from physics_env.quadruped.quadruped import QUADRUPED_TOTAL_MASS, Quadruped, _joint_limit_fraction
 from physics_env.quadruped.quadruped_points import create_quadruped_vertices, get_quadruped_vertices
 
 
@@ -107,14 +116,15 @@ class EnvStateFeaturesTest(unittest.TestCase):
         )
 
         self.assertAlmostEqual(float(components["body_height"][0]), 5.5, places=6)
-        self.assertAlmostEqual(float(components["body_height_error"][0]), 0.5, places=6)
+        expected_body_height_error = 5.5 - 0.5 * (MIN_BODY_HEIGHT + MAX_BODY_HEIGHT)
+        self.assertAlmostEqual(float(components["body_height_error"][0]), expected_body_height_error, places=6)
         np.testing.assert_allclose(components["gravity_body"], np.array([0.0, -1.0, 0.0], dtype=np.float32), atol=1e-6)
         np.testing.assert_allclose(components["task_forward_body"], np.array([0.0, 0.0, -1.0], dtype=np.float32), atol=1e-6)
         np.testing.assert_allclose(components["linear_velocity_task"], expected_task_velocity, atol=1e-6)
         expected_joint_limit_fraction = np.concatenate(
             [
-                np.abs(quadruped.shoulder_angles) / (np.pi / 2.0),
-                np.abs(quadruped.elbow_angles) / (np.pi / 2.0),
+                _joint_limit_fraction(quadruped.shoulder_angles, SHOULDER_ANGLE_MIN, SHOULDER_ANGLE_MAX).astype(np.float32),
+                _joint_limit_fraction(quadruped.elbow_angles, ELBOW_ANGLE_MIN, ELBOW_ANGLE_MAX).astype(np.float32),
             ],
             dtype=np.float32,
         )
@@ -123,6 +133,57 @@ class EnvStateFeaturesTest(unittest.TestCase):
             expected_joint_limit_fraction,
             atol=1e-6,
         )
+
+    def test_joint_limit_push_mask_requires_saturated_joint_and_pushing_action(self):
+        shoulder_angles = np.array([SHOULDER_ANGLE_MAX, SHOULDER_ANGLE_MAX - 0.05], dtype=np.float64)
+        shoulder_actions = np.array([1.0, 1.0], dtype=np.float64)
+
+        mask = QuadrupedEnv._joint_limit_push_mask(
+            shoulder_angles,
+            shoulder_actions,
+            SHOULDER_ANGLE_MIN,
+            SHOULDER_ANGLE_MAX,
+        )
+
+        self.assertTrue(bool(mask[0]))
+        self.assertFalse(bool(mask[1]))
+
+    def test_joint_limit_penalty_starts_after_grace_and_grows_with_persistence(self):
+        penalty_before_grace = QuadrupedEnv._compute_joint_limit_penalty(JOINT_LIMIT_STUCK_GRACE_STEPS)
+        penalty_after_grace = QuadrupedEnv._compute_joint_limit_penalty(JOINT_LIMIT_STUCK_GRACE_STEPS + 1)
+        penalty_near_timeout = QuadrupedEnv._compute_joint_limit_penalty(MAX_CONSECUTIVE_JOINT_LIMIT_STEPS)
+
+        self.assertAlmostEqual(penalty_before_grace, 0.0, places=6)
+        self.assertLess(penalty_after_grace, 0.0)
+        self.assertLess(penalty_near_timeout, penalty_after_grace)
+        self.assertAlmostEqual(penalty_near_timeout, -JOINT_LIMIT_PENALTY_COEF, places=6)
+
+    def test_joint_limit_penalty_handles_zero_exponential_rate(self):
+        original_rate = JOINT_LIMIT_STUCK_EXP_RATE
+        try:
+            from physics_env import envs as envs_pkg  # noqa: F401
+            from physics_env.envs import quadruped_env as quadruped_env_module
+
+            quadruped_env_module.JOINT_LIMIT_STUCK_EXP_RATE = 0.0
+            penalty = QuadrupedEnv._compute_joint_limit_penalty(MAX_CONSECUTIVE_JOINT_LIMIT_STEPS)
+        finally:
+            quadruped_env_module.JOINT_LIMIT_STUCK_EXP_RATE = original_rate
+
+        self.assertAlmostEqual(penalty, -JOINT_LIMIT_PENALTY_COEF, places=6)
+
+    def test_joint_limit_push_mask_supports_asymmetric_lower_bounds(self):
+        elbow_angles = np.array([ELBOW_ANGLE_MIN, ELBOW_ANGLE_MIN + 0.05], dtype=np.float64)
+        elbow_actions = np.array([-1.0, -1.0], dtype=np.float64)
+
+        mask = QuadrupedEnv._joint_limit_push_mask(
+            elbow_angles,
+            elbow_actions,
+            ELBOW_ANGLE_MIN,
+            ELBOW_ANGLE_MAX,
+        )
+
+        self.assertTrue(bool(mask[0]))
+        self.assertFalse(bool(mask[1]))
 
     def test_part_masses_are_derived_from_uniform_density(self):
         vertices_dict = create_quadruped_vertices()

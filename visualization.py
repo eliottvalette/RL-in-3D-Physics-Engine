@@ -350,7 +350,7 @@ class Visualizer:
 
     def _place_legend(self, ax, ncol=1):
         ax.legend(
-            loc="upper right",
+            loc="upper left",
             frameon=True,
             facecolor="#151B23",
             edgecolor="#333A45",
