@@ -5,7 +5,7 @@ import numpy as np
 # The effective physics geometry is derived by a single uniform scale so the
 # whole rig can be resized coherently without touching individual dimensions.
 SOURCE_RIG_SCALE = 0.6632184350604978
-PHYSICS_RIG_SCALE = SOURCE_RIG_SCALE / 1.5
+PHYSICS_RIG_SCALE = SOURCE_RIG_SCALE / 1.1
 
 
 def _vec3(values):
@@ -59,6 +59,6 @@ LOWER_LEG_CENTER_OFFSETS = (
 )
 
 
-# Rest angles copied from the calibrated box rig.
-INITIAL_SHOULDER_ANGLES = np.array([-0.15, -0.15, -0.15, -0.15], dtype=np.float64)
-INITIAL_ELBOW_ANGLES = np.array([-0.63, -0.63, -0.63, -0.63], dtype=np.float64)
+# Python-side rest pose starts from neutral joint angles.
+INITIAL_SHOULDER_ANGLES = np.zeros(4, dtype=np.float64)
+INITIAL_ELBOW_ANGLES = np.zeros(4, dtype=np.float64)

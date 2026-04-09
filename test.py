@@ -30,7 +30,7 @@ def test_agent(agent: QuadrupedAgent, env: QuadrupedEnv):
             steps_count = 0
 
         # Prédiction avec une inférence classique du modèle
-        shoulders, elbows, _ = agent.get_action(state=state, deterministic=False^p)
+        shoulders, elbows, _ = agent.get_action(state=state, deterministic=False)
 
         # Prédiction de la valeur de l'état
         state_tensor = torch.FloatTensor(state).unsqueeze(0)
