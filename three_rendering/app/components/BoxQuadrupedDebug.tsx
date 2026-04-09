@@ -78,18 +78,18 @@ function DebugLeg({
             <boxGeometry args={upperLegSize} />
             <meshBasicMaterial color="#ffffff" wireframe transparent opacity={0.65} />
           </mesh>
-        </group>
-        <group
-          position={elbowOffset}
-          ref={(node) => {
-            groupsRef.current[LEG_TO_JOINTS[legName].elbow] = node;
-          }}
-        >
-          <group quaternion={lowerLegQuaternion}>
-            <mesh position={lowerLegCenterOffset}>
-              <boxGeometry args={lowerLegSize} />
-              <meshBasicMaterial color="#d9d9d9" wireframe transparent opacity={0.65} />
-            </mesh>
+          <group
+            position={elbowOffset}
+            ref={(node) => {
+              groupsRef.current[LEG_TO_JOINTS[legName].elbow] = node;
+            }}
+          >
+            <group quaternion={lowerLegQuaternion}>
+              <mesh position={lowerLegCenterOffset}>
+                <boxGeometry args={lowerLegSize} />
+                <meshBasicMaterial color="#d9d9d9" wireframe transparent opacity={0.65} />
+              </mesh>
+            </group>
           </group>
         </group>
       </group>
