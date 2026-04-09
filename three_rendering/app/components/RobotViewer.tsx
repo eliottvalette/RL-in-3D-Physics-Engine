@@ -10,13 +10,22 @@ import { bindRobotRig, applyPoseFrame } from "@/lib/robotModel";
 import { buildMockPoseFrame, type RobotPoseFrame } from "@/lib/robotPose";
 import { DEFAULT_RIG_MAP } from "@/lib/robotRigMap";
 import { createPosePoller } from "@/lib/socketClient";
+import { DEFAULT_BOX_QUADRUPED_CALIBRATION } from "@/lib/boxQuadrupedConfig";
+
+const GLB_RENDER_SCALE = 0.5;
+const GLB_RENDER_POSITION: [number, number, number] = [0, -2.1, 0];
+const GLB_BODY_CENTER_Y_REST = 13.8931;
+const BOX_BODY_CENTER_Y_REST = DEFAULT_BOX_QUADRUPED_CALIBRATION.bodyCenterOffset[1];
+const OVERLAP_BOX_Y_OFFSET =
+  GLB_RENDER_POSITION[1] + GLB_BODY_CENTER_Y_REST * GLB_RENDER_SCALE - BOX_BODY_CENTER_Y_REST + 2;
 
 type RobotSceneProps = {
   poseFrame: RobotPoseFrame | null;
   useMockPose: boolean;
+  renderOffset?: [number, number, number];
 };
 
-function RobotScene({ poseFrame, useMockPose }: RobotSceneProps) {
+function RobotScene({ poseFrame, useMockPose, renderOffset = [0, 0, 0] }: RobotSceneProps) {
   const { scene } = useGLTF("/models/rigged_robot_walk.glb");
   const rootRef = useRef<THREE.Group | null>(null);
   const bindingsRef = useRef<ReturnType<typeof bindRobotRig> | null>(null);
@@ -58,13 +67,25 @@ function RobotScene({ poseFrame, useMockPose }: RobotSceneProps) {
     applyPoseFrame(bindings, frame, DEFAULT_RIG_MAP);
   });
 
-  return <primitive ref={rootRef} object={clonedScene} scale={0.5} position={[0, -2.1, 0]} />;
+  return (
+    <primitive
+      ref={rootRef}
+      object={clonedScene}
+      scale={GLB_RENDER_SCALE}
+      position={[
+        renderOffset[0] + GLB_RENDER_POSITION[0],
+        renderOffset[1] + GLB_RENDER_POSITION[1],
+        renderOffset[2] + GLB_RENDER_POSITION[2],
+      ]}
+    />
+  );
 }
 
 export function RobotViewer() {
   const [poseFrame, setPoseFrame] = useState<RobotPoseFrame | null>(null);
   const [streamConnected, setStreamConnected] = useState(false);
   const [useMockPose, setUseMockPose] = useState(true);
+  const [overlapMode, setOverlapMode] = useState(false);
 
   useEffect(() => {
     const stop = createPosePoller("http://127.0.0.1:8765/pose", {
@@ -83,10 +104,24 @@ export function RobotViewer() {
     return stop;
   }, []);
 
+  const glbOffset: [number, number, number] = overlapMode ? [0, 0, 0] : [0, 0, -4.5];
+  const boxOffset: [number, number, number] = overlapMode
+    ? [0, OVERLAP_BOX_Y_OFFSET, 0]
+    : [0, OVERLAP_BOX_Y_OFFSET, 4.5];
+
   return (
     <div className="viewer-shell" style={{ position: "relative", width: "100%", height: "100%" }}>
       <div className="viewer-overlay">
         <p>{streamConnected ? "Bridge connected" : "Mock pose loop"}</p>
+      </div>
+      <div className="viewer-controls">
+        <button
+          type="button"
+          className="viewer-toggle"
+          onClick={() => setOverlapMode((value) => !value)}
+        >
+          {overlapMode ? "Overlap" : "Separated"}
+        </button>
       </div>
       <Canvas shadows camera={{ position: [10, 8, 12], fov: 42 }}>
         <color attach="background" args={["#000000"]} />
@@ -102,8 +137,10 @@ export function RobotViewer() {
         />
         <axesHelper args={[3]} />
         <Suspense fallback={<Html center>Loading GLB…</Html>}>
-          <RobotScene poseFrame={poseFrame} useMockPose={useMockPose} />
-          <BoxQuadrupedDebug poseFrame={poseFrame} useMockPose={useMockPose} />
+          <RobotScene poseFrame={poseFrame} useMockPose={useMockPose} renderOffset={glbOffset} />
+          <group position={boxOffset}>
+            <BoxQuadrupedDebug poseFrame={poseFrame} useMockPose={useMockPose} />
+          </group>
         </Suspense>
         <OrbitControls makeDefault />
       </Canvas>

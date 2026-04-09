@@ -20,49 +20,139 @@ export type BoxQuadrupedCalibration = {
   lowerLegRestAxisAngle: Record<BoxLegName, AxisAngle>;
 };
 
+type LegSigns = {
+  side: -1 | 1;
+  depth: -1 | 1;
+};
+
+const LEG_SIGNS: Record<BoxLegName, LegSigns> = {
+  front_left: { side: -1, depth: 1 },
+  front_right: { side: 1, depth: 1 },
+  back_left: { side: -1, depth: -1 },
+  back_right: { side: 1, depth: -1 },
+};
+
+const MODEL_SCALE = 1.0;
+const ROOT_OFFSET: Vec3 = [0, 0, 0];
+const BODY_CENTER_OFFSET: Vec3 = [0, -0.05, 0.15];
+
+const BODY_SIZE: Vec3 = [5.7461, 1.938, 12.0739];
+const UPPER_LEG_SIZE: Vec3 = [1.5144, 4.1, 1.6753];
+const LOWER_LEG_SIZE: Vec3 = [0.752, 5.0747, 1.1237];
+
+const SHOULDER_ANGLE_SIGN = -1;
+const ELBOW_ANGLE_SIGN = -1;
+
+const FRONT_SHOULDER_X = 2.87;
+const FRONT_SHOULDER_Y = 0.5;
+const FRONT_SHOULDER_Z = 5.3;
+
+const BACK_SHOULDER_X = 2.87;
+const BACK_SHOULDER_Y = 0.5;
+const BACK_SHOULDER_Z = 5.3;
+
+const UPPER_CENTER_X = 0.7572;
+const UPPER_CENTER_Y = -2.4212;
+
+const ELBOW_X = 0.7572;
+const ELBOW_Y = -4;
+const ELBOW_Z = -0.6;
+
+const FRONT_LOWER_CENTER_X = 1.1332;
+const FRONT_LOWER_CENTER_Y = -2.53735;
+const FRONT_LOWER_CENTER_Z = 0;
+
+const BACK_LOWER_CENTER_X = 1.1332;
+const BACK_LOWER_CENTER_Y = -2.53735;
+const BACK_LOWER_CENTER_Z = 0;
+
+const FRONT_UPPER_REST_AXIS: Vec3 = [1, 0, 0];
+const BACK_UPPER_REST_AXIS: Vec3 = [1, 0, 0];
+const FRONT_LOWER_REST_AXIS: Vec3 = [1, 0, 0];
+const BACK_LOWER_REST_AXIS: Vec3 = [1, 0, 0];
+
+
+const FRONT_UPPER_REST_ANGLE = -0.15;
+const FRONT_LOWER_REST_ANGLE = -0.7685;
+
+const BACK_UPPER_REST_ANGLE = -0.15;
+const BACK_LOWER_REST_ANGLE = -0.7685;
+
+function buildPerLegVec3(
+  mapper: (legName: BoxLegName, signs: LegSigns) => Vec3,
+): Record<BoxLegName, Vec3> {
+  return {
+    front_left: mapper("front_left", LEG_SIGNS.front_left),
+    front_right: mapper("front_right", LEG_SIGNS.front_right),
+    back_left: mapper("back_left", LEG_SIGNS.back_left),
+    back_right: mapper("back_right", LEG_SIGNS.back_right),
+  };
+}
+
+function buildPerLegAxisAngle(
+  mapper: (legName: BoxLegName, signs: LegSigns) => AxisAngle,
+): Record<BoxLegName, AxisAngle> {
+  return {
+    front_left: mapper("front_left", LEG_SIGNS.front_left),
+    front_right: mapper("front_right", LEG_SIGNS.front_right),
+    back_left: mapper("back_left", LEG_SIGNS.back_left),
+    back_right: mapper("back_right", LEG_SIGNS.back_right),
+  };
+}
+
+function sideDepthVec(xAbs: number, y: number, zAbs: number): Record<BoxLegName, Vec3> {
+  return buildPerLegVec3((_legName, signs) => [signs.side * xAbs, y, signs.depth * zAbs]);
+}
+
+function sideOnlyVec(xAbs: number, y: number, z: number): Record<BoxLegName, Vec3> {
+  return buildPerLegVec3((_legName, signs) => [signs.side * xAbs, y, z]);
+}
+
+function frontBackSideVec(
+  front: { xAbs: number; y: number; z: number },
+  back: { xAbs: number; y: number; z: number },
+): Record<BoxLegName, Vec3> {
+  return buildPerLegVec3((legName, signs) => {
+    const source = legName.startsWith("front_") ? front : back;
+    return [signs.side * source.xAbs, source.y, signs.depth * source.z];
+  });
+}
+
+function frontBackSideOnlyVec(
+  front: { xAbs: number; y: number; z: number },
+  back: { xAbs: number; y: number; z: number },
+): Record<BoxLegName, Vec3> {
+  return buildPerLegVec3((legName, signs) => {
+    const source = legName.startsWith("front_") ? front : back;
+    return [signs.side * source.xAbs, source.y, source.z];
+  });
+}
+
 export const DEFAULT_BOX_QUADRUPED_CALIBRATION: BoxQuadrupedCalibration = {
-  modelScale: 1.0,
-  rootOffset: [0, 0, 0],
-  bodyCenterOffset: [0, -0.05, 0.15],
-  bodySize: [5.7461, 1.938, 12.0739],
-  upperLegSize: [1.5144, 4.8424, 1.6753],
-  lowerLegSize: [0.752, 5.0747, 1.1237],
-  shoulderAngleSign: -1,
-  elbowAngleSign: -1,
-  shoulderAnchors: {
-    front_left: [-2.8731, -0.1, 5.15],
-    front_right: [2.8731, -0.1, 5.15],
-    back_left: [-2.8731, -0.1, -5.15],
-    back_right: [2.8731, -0.1, -5.15],
-  },
-  upperLegCenterOffsets: {
-    front_left: [-0.7572, -2.4212, 0],
-    front_right: [0.7572, -2.4212, 0],
-    back_left: [-0.7572, -2.4212, 0],
-    back_right: [0.7572, -2.4212, 0],
-  },
-  elbowOffsets: {
-    front_left: [-0.7572, -4.55, 0.18],
-    front_right: [0.7572, -4.55, 0.18],
-    back_left: [-0.7572, -4.55, 0.18],
-    back_right: [0.7572, -4.55, 0.18],
-  },
-  lowerLegCenterOffsets: {
-    front_left: [-1.1332, -2.53735, 0],
-    front_right: [1.1332, -2.53735, 0],
-    back_left: [-1.1332, -2.53735, 0],
-    back_right: [1.1332, -2.53735, 0],
-  },
-  upperLegRestAxisAngle: {
-    front_left: { axis: [1, 0, 0], angle: -0.16202 },
-    front_right: { axis: [1, 0, 0], angle: -0.16202 },
-    back_left: { axis: [1, 0, 0], angle: -0.15374 },
-    back_right: { axis: [1, 0, 0], angle: -0.15374 },
-  },
-  lowerLegRestAxisAngle: {
-    front_left: { axis: [-0.999482, 0, 0.032184], angle: 0.758704 },
-    front_right: { axis: [-0.999433, 0, -0.033673], angle: 0.761789 },
-    back_left: { axis: [-0.999595, 0, 0.028451], angle: 0.776615 },
-    back_right: { axis: [-0.999008, 0, -0.044522], angle: 0.776909 },
-  },
+  modelScale: MODEL_SCALE,
+  rootOffset: ROOT_OFFSET,
+  bodyCenterOffset: BODY_CENTER_OFFSET,
+  bodySize: BODY_SIZE,
+  upperLegSize: UPPER_LEG_SIZE,
+  lowerLegSize: LOWER_LEG_SIZE,
+  shoulderAngleSign: SHOULDER_ANGLE_SIGN,
+  elbowAngleSign: ELBOW_ANGLE_SIGN,
+  shoulderAnchors: frontBackSideVec(
+    { xAbs: FRONT_SHOULDER_X, y: FRONT_SHOULDER_Y, z: FRONT_SHOULDER_Z },
+    { xAbs: BACK_SHOULDER_X, y: BACK_SHOULDER_Y, z: BACK_SHOULDER_Z },
+  ),
+  upperLegCenterOffsets: sideOnlyVec(UPPER_CENTER_X, UPPER_CENTER_Y, 0),
+  elbowOffsets: sideOnlyVec(ELBOW_X, ELBOW_Y, ELBOW_Z),
+  lowerLegCenterOffsets: frontBackSideOnlyVec(
+    { xAbs: FRONT_LOWER_CENTER_X, y: FRONT_LOWER_CENTER_Y, z: FRONT_LOWER_CENTER_Z },
+    { xAbs: BACK_LOWER_CENTER_X, y: BACK_LOWER_CENTER_Y, z: BACK_LOWER_CENTER_Z },
+  ),
+  upperLegRestAxisAngle: buildPerLegAxisAngle((legName) => ({
+    axis: legName.startsWith("front_") ? FRONT_UPPER_REST_AXIS : BACK_UPPER_REST_AXIS,
+    angle: legName.startsWith("front_") ? FRONT_UPPER_REST_ANGLE : BACK_UPPER_REST_ANGLE,
+  })),
+  lowerLegRestAxisAngle: buildPerLegAxisAngle((legName) => ({
+    axis: legName.startsWith("front_") ? FRONT_LOWER_REST_AXIS : BACK_LOWER_REST_AXIS,
+    angle: legName.startsWith("front_") ? FRONT_LOWER_REST_ANGLE : BACK_LOWER_REST_ANGLE,
+  })),
 };
