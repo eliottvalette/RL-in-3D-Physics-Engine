@@ -37,30 +37,30 @@ const ROOT_OFFSET: Vec3 = [0, 0, 0];
 const BODY_CENTER_OFFSET: Vec3 = [0, -0.05, 0.15];
 
 const BODY_SIZE: Vec3 = [5.7461, 1.938, 12.0739];
-const UPPER_LEG_SIZE: Vec3 = [1.5144, 4.1, 1.6753];
-const LOWER_LEG_SIZE: Vec3 = [0.752, 5.0747, 1.1237];
+const UPPER_LEG_SIZE: Vec3 = [1.5144, 3.9, 1.6753];
+const LOWER_LEG_SIZE: Vec3 = [0.752, 4.6, 1.1237];
 
 const SHOULDER_ANGLE_SIGN = -1;
 const ELBOW_ANGLE_SIGN = -1;
 
 const FRONT_SHOULDER_X = 2.87;
-const FRONT_SHOULDER_Y = 0.5;
-const FRONT_SHOULDER_Z = 5.3;
+const FRONT_SHOULDER_Y = 0.55;
+const FRONT_SHOULDER_Z = 4.95;
 
 const BACK_SHOULDER_X = 2.87;
-const BACK_SHOULDER_Y = 0.5;
+const BACK_SHOULDER_Y = 0.55;
 const BACK_SHOULDER_Z = 5.3;
 
 const UPPER_CENTER_X = 0.7572;
 const UPPER_CENTER_Y = -2.4212;
 
 const ELBOW_X = 0.7572;
-const ELBOW_Y = -4;
-const ELBOW_Z = -0.6;
+const ELBOW_Y = -4.2;
+const ELBOW_Z = -0.15;
 
 const FRONT_LOWER_CENTER_X = 1.1332;
-const FRONT_LOWER_CENTER_Y = -2.53735;
-const FRONT_LOWER_CENTER_Z = 0;
+const FRONT_LOWER_CENTER_Y = -2.5;
+const FRONT_LOWER_CENTER_Z = -0.2;
 
 const BACK_LOWER_CENTER_X = 1.1332;
 const BACK_LOWER_CENTER_Y = -2.53735;
@@ -73,10 +73,10 @@ const BACK_LOWER_REST_AXIS: Vec3 = [1, 0, 0];
 
 
 const FRONT_UPPER_REST_ANGLE = -0.15;
-const FRONT_LOWER_REST_ANGLE = -0.7685;
+const FRONT_LOWER_REST_ANGLE = -0.63;
 
 const BACK_UPPER_REST_ANGLE = -0.15;
-const BACK_LOWER_REST_ANGLE = -0.7685;
+const BACK_LOWER_REST_ANGLE = -0.63;
 
 function buildPerLegVec3(
   mapper: (legName: BoxLegName, signs: LegSigns) => Vec3,

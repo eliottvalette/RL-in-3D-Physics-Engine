@@ -13,11 +13,11 @@ import { createPosePoller } from "@/lib/socketClient";
 import { DEFAULT_BOX_QUADRUPED_CALIBRATION } from "@/lib/boxQuadrupedConfig";
 
 const GLB_RENDER_SCALE = 0.5;
-const GLB_RENDER_POSITION: [number, number, number] = [0, -2.1, 0];
+const GLB_RENDER_POSITION: [number, number, number] = [0, 0, 0];
 const GLB_BODY_CENTER_Y_REST = 13.8931;
 const BOX_BODY_CENTER_Y_REST = DEFAULT_BOX_QUADRUPED_CALIBRATION.bodyCenterOffset[1];
 const OVERLAP_BOX_Y_OFFSET =
-  GLB_RENDER_POSITION[1] + GLB_BODY_CENTER_Y_REST * GLB_RENDER_SCALE - BOX_BODY_CENTER_Y_REST + 2;
+  GLB_RENDER_POSITION[1] + GLB_BODY_CENTER_Y_REST * GLB_RENDER_SCALE - BOX_BODY_CENTER_Y_REST;
 
 type RobotSceneProps = {
   poseFrame: RobotPoseFrame | null;
@@ -107,7 +107,7 @@ export function RobotViewer() {
   const glbOffset: [number, number, number] = overlapMode ? [0, 0, 0] : [0, 0, -4.5];
   const boxOffset: [number, number, number] = overlapMode
     ? [0, OVERLAP_BOX_Y_OFFSET, 0]
-    : [0, OVERLAP_BOX_Y_OFFSET, 4.5];
+    : [10, OVERLAP_BOX_Y_OFFSET, 0];
 
   return (
     <div className="viewer-shell" style={{ position: "relative", width: "100%", height: "100%" }}>

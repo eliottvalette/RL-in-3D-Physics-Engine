@@ -74,7 +74,7 @@ select {
 
 .viewer-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.8fr) minmax(320px, 0.8fr);
+  grid-template-columns: minmax(0, 3fr) minmax(320px, 0.8fr);
   gap: 12px;
   min-height: 0;
   height: 100%;
