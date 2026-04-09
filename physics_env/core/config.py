@@ -58,8 +58,8 @@ MOTOR_BRAKE_DIFFICULTY_BOOST = 0.45
 MOTOR_DAMPING_DIFFICULTY_BOOST = 0.22
 
 # --- Reset pose randomization --------------------------------------
-RESET_JOINT_ANGLE_JITTER = np.deg2rad(00.0)
-RESET_VERTICAL_AXIS_ROTATION_JITTER = np.deg2rad(0.0)
+RESET_JOINT_ANGLE_JITTER = np.deg2rad(3.0)
+RESET_VERTICAL_AXIS_ROTATION_JITTER = np.deg2rad(3.0)
 
 # --- Contraintes RL ----------------------------------------------------
 CRITICAL_TILT_ANGLE = np.deg2rad(20.0)
@@ -108,8 +108,8 @@ ALPHA = 3e-4
 STATE_SIZE = 102
 ACTION_SIZE = 8
 
-RENDERING = True
-PROFILING = True
+RENDERING = False
+PROFILING = False
 
 
 def units_to_meters(value):

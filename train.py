@@ -63,14 +63,13 @@ def _aggregate_metric_dicts(metric_dicts):
 
 
 def run_episode(env: QuadrupedEnv, agent: QuadrupedAgent, rendering: bool, episode: int, render_every: int, data_collector: DataCollector):
-    env.reset_episode(pose_jitter=True)
+    state = env.reset_episode(pose_jitter=True)
     event_flags = _new_event_flags()
     episode_reward = 0.0
     locomotion_scales = []
     steps_count = 0
 
     for step in range(MAX_STEPS):
-        state = env.get_state()
         shoulders, elbows, action_info = agent.get_action(state, deterministic=False)
         next_state, reward, terminated, step_time = env.step(shoulders, elbows)
         truncated = step == MAX_STEPS - 1
@@ -103,6 +102,8 @@ def run_episode(env: QuadrupedEnv, agent: QuadrupedAgent, rendering: bool, episo
         if terminated or truncated:
             break
 
+        state = next_state
+
     summary = {
         "steps_count": float(steps_count),
         "episode_reward": float(episode_reward),
@@ -118,15 +119,14 @@ def run_episode(env: QuadrupedEnv, agent: QuadrupedAgent, rendering: bool, episo
 
 
 def run_evaluation_episode(agent: QuadrupedAgent, env: QuadrupedEnv):
-    env.reset_episode(pose_jitter=True)
+    state = env.reset_episode(pose_jitter=True)
     event_flags = _new_event_flags()
     episode_reward = 0.0
     locomotion_scales = []
 
     for _ in range(MAX_STEPS):
-        state = env.get_state()
         shoulders, elbows, _ = agent.get_action(state, deterministic=True)
-        _, reward, terminated, _ = env.step(shoulders, elbows)
+        next_state, reward, terminated, _ = env.step(shoulders, elbows)
         episode_reward += reward
         locomotion_scale = env.last_reward_components.get("locomotion_reward_scale")
         if locomotion_scale is not None:
@@ -134,6 +134,7 @@ def run_evaluation_episode(agent: QuadrupedAgent, env: QuadrupedEnv):
         _update_event_flags(event_flags, env.last_done_reason)
         if terminated:
             break
+        state = next_state
 
     eval_metrics = {
         "eval_episode_reward": float(episode_reward),

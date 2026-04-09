@@ -415,7 +415,10 @@ class Quadruped:
         gravity_norm = float(np.linalg.norm(GRAVITY))
         gravity_direction_world = GRAVITY / gravity_norm if gravity_norm > 1e-12 else np.array([0.0, -1.0, 0.0], dtype=np.float64)
         task_forward_world = np.array([0.0, 0.0, -1.0], dtype=np.float64)
-        center_of_mass_velocity_world = self.get_center_of_mass_velocity()
+        rotation_matrix = self.get_rotation_matrix()
+        world_to_body = rotation_matrix.T
+        com_offset_world = rotation_matrix @ self.local_center_of_mass
+        center_of_mass_velocity_world = self.velocity + np.cross(self.angular_velocity, com_offset_world)
         task_frame_velocity = np.array(
             [center_of_mass_velocity_world[0], center_of_mass_velocity_world[1], -center_of_mass_velocity_world[2]],
             dtype=np.float64,
@@ -427,24 +430,28 @@ class Quadruped:
             ],
             dtype=np.float64,
         )
-        foot_centers_world = self.get_foot_centers_world()
+        foot_centers_local = self.get_foot_centers_local()
+        foot_centers_world = np.empty((4, 3), dtype=np.float64)
+        for leg_idx in range(4):
+            foot_centers_world[leg_idx] = rotation_matrix @ foot_centers_local[leg_idx] + self.position
+        foot_velocities_local = self.get_foot_center_velocities_local()
         foot_heights_world = foot_centers_world[:, 1]
 
         return {
             "body_height": np.array([self.position[1]], dtype=np.float32),
             "body_height_error": np.array([self.position[1] - 0.5 * (MIN_BODY_HEIGHT + MAX_BODY_HEIGHT)], dtype=np.float32),
-            "linear_velocity_body": self.get_body_frame_vector(center_of_mass_velocity_world).astype(np.float32),
+            "linear_velocity_body": (world_to_body @ center_of_mass_velocity_world).astype(np.float32),
             "linear_velocity_task": task_frame_velocity.astype(np.float32),
-            "angular_velocity_body": self.get_body_frame_vector(self.angular_velocity).astype(np.float32),
-            "gravity_body": self.get_body_frame_vector(gravity_direction_world).astype(np.float32),
-            "task_forward_body": self.get_body_frame_vector(task_forward_world).astype(np.float32),
+            "angular_velocity_body": (world_to_body @ self.angular_velocity).astype(np.float32),
+            "gravity_body": (world_to_body @ gravity_direction_world).astype(np.float32),
+            "task_forward_body": (world_to_body @ task_forward_world).astype(np.float32),
             "shoulder_angles": self.shoulder_angles.astype(np.float32),
             "elbow_angles": self.elbow_angles.astype(np.float32),
             "shoulder_velocities": self.shoulder_velocities.astype(np.float32),
             "elbow_velocities": self.elbow_velocities.astype(np.float32),
             "joint_limit_fraction": np.clip(joint_limit_fraction, 0.0, 1.0).astype(np.float32),
-            "foot_positions_body": self.get_foot_centers_local().astype(np.float32).reshape(-1),
-            "foot_velocities_body": self.get_foot_center_velocities_local().astype(np.float32).reshape(-1),
+            "foot_positions_body": foot_centers_local.astype(np.float32).reshape(-1),
+            "foot_velocities_body": foot_velocities_local.astype(np.float32).reshape(-1),
             "foot_heights_world": foot_heights_world.astype(np.float32),
         }
 

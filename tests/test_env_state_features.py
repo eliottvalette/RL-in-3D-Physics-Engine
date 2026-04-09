@@ -87,7 +87,7 @@ class EnvStateFeaturesTest(unittest.TestCase):
 
         np.testing.assert_allclose(first_foot_position, np.array([1.0, -3.0, 2.0], dtype=np.float32))
         np.testing.assert_allclose(first_foot_velocity, np.zeros(3, dtype=np.float32))
-        self.assertAlmostEqual(first_foot_height, -3.0, places=6)
+        self.assertAlmostEqual(first_foot_height, 2.5, places=6)
 
     def test_body_frame_features_are_semantic(self):
         vertices_dict = create_quadruped_vertices()

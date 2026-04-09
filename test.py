@@ -12,7 +12,7 @@ def test_agent(agent: QuadrupedAgent, env: QuadrupedEnv):
     L'Agent Agir.
     """
 
-    env.reset_episode(pose_jitter=True)
+    state = env.reset_episode(pose_jitter=True)
 
     #### Boucle principale du jeu ####
     running = True
@@ -26,11 +26,8 @@ def test_agent(agent: QuadrupedAgent, env: QuadrupedEnv):
         camera_actions = env.handle_camera_controls(keys)
 
         if keys[K_SPACE]:
-            env.reset_episode(pose_jitter=True)
+            state = env.reset_episode(pose_jitter=True)
             steps_count = 0
-        
-        # Récupération de l'état actuel
-        state = env.get_state()
 
         # Prédiction avec une inférence classique du modèle
         shoulders, elbows, _ = agent.get_action(state=state, deterministic=True)
@@ -40,7 +37,7 @@ def test_agent(agent: QuadrupedAgent, env: QuadrupedEnv):
         state_value = agent.critic_model.forward(state_tensor).item()
 
         # Exécuter l'action dans l'environnement avec les actions de caméra
-        _, reward, done, step_time = env.step(shoulders, elbows, camera_actions)
+        next_state, reward, done, step_time = env.step(shoulders, elbows, camera_actions)
         steps_count += 1
         
         # Rendu graphique
@@ -48,8 +45,10 @@ def test_agent(agent: QuadrupedAgent, env: QuadrupedEnv):
 
         if done:
             print(f"done: {done}, steps: {steps_count}, reason: {env.last_done_reason}")
-            env.reset_episode(pose_jitter=True)
+            state = env.reset_episode(pose_jitter=True)
             steps_count = 0
+        else:
+            state = next_state
 
 
 def build_test_agent():

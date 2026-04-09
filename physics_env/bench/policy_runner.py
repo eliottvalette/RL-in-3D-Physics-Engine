@@ -157,10 +157,11 @@ def run_policy_bench(
 
     try:
         if initial_scenario == TEST_RESET_SCENARIO:
-            env.reset_episode(pose_jitter=True)
+            state = env.reset_episode(pose_jitter=True)
         else:
             scenario.reset(env)
             env.reset_episode_state()
+            state = env.get_state()
 
         running = True
         camera_actions = [0] * 10
@@ -175,7 +176,6 @@ def run_policy_bench(
                 keys = pygame.key.get_pressed()
                 camera_actions = env.handle_camera_controls(keys)
 
-            state = env.get_state()
             shoulders, elbows, action_info = policy_agent.get_action(state=state, deterministic=deterministic)
             if action_info is None:
                 action_info = {}
@@ -187,7 +187,7 @@ def run_policy_bench(
                 dtype=np.float32,
             )
 
-            _, reward, env_done, step_time = env.step(shoulders, elbows, camera_actions)
+            next_state, reward, env_done, step_time = env.step(shoulders, elbows, camera_actions)
             policy_stats.update(env, action, action_info, env_done)
             metrics.update(env, reward, step_time, done=env_done, env_done=env_done)
 
@@ -200,6 +200,7 @@ def run_policy_bench(
 
             if env_done or (scenario is not None and scenario.should_stop(env, step_idx, env_done)):
                 break
+            state = next_state
 
         payload = metrics.to_dict()
         payload.update(policy_stats.to_dict())
