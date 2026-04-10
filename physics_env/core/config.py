@@ -70,8 +70,8 @@ MOTOR_BRAKE_DIFFICULTY_BOOST = 0.45
 MOTOR_DAMPING_DIFFICULTY_BOOST = 0.22
 
 # --- Reset pose randomization --------------------------------------
-RESET_JOINT_ANGLE_JITTER = np.deg2rad(0.0)
-RESET_VERTICAL_AXIS_ROTATION_JITTER = np.deg2rad(0.0)
+RESET_JOINT_ANGLE_JITTER = np.deg2rad(9.0)
+RESET_VERTICAL_AXIS_ROTATION_JITTER = np.deg2rad(3.0)
 
 # --- Contraintes RL ----------------------------------------------------
 CRITICAL_TILT_ANGLE = np.deg2rad(20.0)
@@ -106,7 +106,7 @@ DEBUG_RL_AGENT = False
 EPISODES  = 2_000
 MAX_STEPS = 750
 ROLLOUT_STEPS = 256
-GAE_LAMBDA = 0.99
+GAE_LAMBDA = 0.998
 ENTROPY_COEFF = 0.02
 CRITIC_LOSS_COEFF = 0.5
 PPO_CLIP_EPS = 0.2

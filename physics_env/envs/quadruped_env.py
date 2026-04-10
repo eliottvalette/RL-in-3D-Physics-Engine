@@ -590,6 +590,7 @@ class QuadrupedEnv:
         self.screen.fill(BLACK)
         self.ground.draw_premium(self.screen, self.camera)
         self.ground.draw_axes(self.screen, self.camera)
+        self.quadruped.render_action_vector = self.prev_action.copy()
         self.quadruped.draw_premium(self.screen, self.camera)
         self.render_ui(reward, done, step_time, state_value)
         if not self.headless:

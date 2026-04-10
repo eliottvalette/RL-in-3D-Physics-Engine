@@ -52,6 +52,15 @@ def _joint_limit_fraction(angles, angle_min, angle_max):
     return np.clip(fractions, 0.0, 1.0)
 
 
+def _action_edge_color(action_value):
+    action_value = float(action_value)
+    if action_value > 0.0:
+        return (255, 0, 0)
+    if action_value < 0.0:
+        return (0, 0, 255)
+    return (0, 0, 0)
+
+
 class Quadruped:
     def __init__(self, position, vertices, vertices_dict, rotation = np.array([0.0, 0.0, 0.0]), velocity = np.array([0.0, 0.0, 0.0]), color = (255, 255, 255)):
         self.initial_position = position.copy()
@@ -637,11 +646,17 @@ class Quadruped:
             [0, 2, 6, 4],  # Face inférieure
             [1, 3, 7, 5]   # Face supérieure
         ]
+        cube_edges = [
+            (0, 1), (1, 3), (3, 2), (2, 0),
+            (4, 5), (5, 7), (7, 6), (6, 4),
+            (0, 4), (1, 5), (2, 6), (3, 7),
+        ]
         
         # Dessiner chaque partie du quadruped (body + 8 legs)
         # Chaque partie a 8 vertices, donc on dessine par groupes de 8
         parts_per_leg = 8
         total_parts = len(projected_vertices) // parts_per_leg
+        current_actions = getattr(self, "render_action_vector", np.zeros(8, dtype=np.float32))
         
         # Trier les faces par profondeur pour le rendu correct (painter's algorithm)
         all_faces = []
@@ -706,3 +721,26 @@ class Quadruped:
                 
                 # Optionnel : dessiner les contours des faces pour plus de définition
                 pygame.draw.polygon(screen, (50, 50, 50), points_2d, 1)
+
+        for part_idx in range(1, total_parts):
+            start_idx = part_idx * parts_per_leg
+            end_idx = start_idx + parts_per_leg
+            if end_idx > len(projected_vertices):
+                continue
+
+            part_vertices = projected_vertices[start_idx:end_idx]
+            action_index = part_idx - 1
+            if action_index >= len(current_actions):
+                action_value = 0.0
+            else:
+                action_value = current_actions[action_index]
+            edge_color = _action_edge_color(action_value)
+
+            for edge_start, edge_end in cube_edges:
+                start = part_vertices[edge_start][:2]
+                end = part_vertices[edge_end][:2]
+                if (
+                    0 <= start[0] < WINDOW_WIDTH and 0 <= start[1] < WINDOW_HEIGHT
+                    and 0 <= end[0] < WINDOW_WIDTH and 0 <= end[1] < WINDOW_HEIGHT
+                ):
+                    pygame.draw.line(screen, edge_color, start, end, 2)
