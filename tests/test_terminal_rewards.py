@@ -4,11 +4,18 @@ from unittest.mock import patch
 import numpy as np
 
 from physics_env.core.config import (
+    ACTION_CHANGE_PENALTY_COEF,
     ANGULAR_VELOCITY_PENALTY_COEF,
     HEIGHT_SOFT_REWARD_MARGIN,
+    CONTACT_QUALITY_SCALE_FLOOR,
     CRITICAL_TILT_ANGLE,
+    FOOT_UNUSED_GRACE_STEPS,
+    FOOT_UNUSED_MAX_PENALTY,
+    FOOT_UNUSED_WINDOW_STEPS,
+    FOOT_SLIP_MAX_PENALTY,
     TERMINAL_PENALTY_AIRBORNE,
-    HEIGHT_SOFT_REWARD_MARGIN,
+    FOOT_SLIP_PENALTY_COEF,
+    FOOT_SLIP_SPEED_THRESHOLD,
     MAX_AIRBORNE_STEPS,
     MAX_BODY_HEIGHT,
     MAX_CONSECUTIVE_JOINT_LIMIT_STEPS,
@@ -30,6 +37,10 @@ def _freeze_physics():
 
 def _set_ground_contact(env):
     env.quadruped.active_contact_indices = np.array([0], dtype=np.int64)
+
+
+def _set_two_foot_contacts(env):
+    env.quadruped.active_contact_indices = np.array([40, 48], dtype=np.int64)
 
 
 class TerminalRewardsTest(unittest.TestCase):
@@ -98,7 +109,7 @@ class TerminalRewardsTest(unittest.TestCase):
 
     def test_near_critical_tilt_softly_reduces_progress_reward(self):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
-        _set_ground_contact(env)
+        _set_two_foot_contacts(env)
         env.prev_potential = 0.0
         env.quadruped.position[2] = -0.02
         target_tilt = CRITICAL_TILT_ANGLE - 0.5 * TILT_SOFT_REWARD_MARGIN
@@ -148,7 +159,7 @@ class TerminalRewardsTest(unittest.TestCase):
 
     def test_forward_progress_is_the_only_positive_locomotion_reward(self):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
-        _set_ground_contact(env)
+        _set_two_foot_contacts(env)
         env.prev_potential = 0.0
         env.quadruped.position[2] = -0.02
         env.quadruped.velocity[2] = -0.5
@@ -169,7 +180,7 @@ class TerminalRewardsTest(unittest.TestCase):
 
     def test_near_low_height_limit_softly_reduces_progress_reward(self):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
-        _set_ground_contact(env)
+        _set_two_foot_contacts(env)
         env.prev_potential = 0.0
         env.quadruped.position[2] = -0.02
         env.quadruped.position[1] = MIN_BODY_HEIGHT + 0.5 * HEIGHT_SOFT_REWARD_MARGIN
@@ -214,7 +225,7 @@ class TerminalRewardsTest(unittest.TestCase):
 
     def test_angular_velocity_penalty_discourages_body_oscillation(self):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
-        _set_ground_contact(env)
+        _set_two_foot_contacts(env)
         env.prev_potential = 0.0
         env.quadruped.angular_velocity = np.array([0.0, 2.0, 0.0], dtype=np.float64)
 
@@ -230,6 +241,89 @@ class TerminalRewardsTest(unittest.TestCase):
             places=6,
         )
         self.assertAlmostEqual(reward, -ANGULAR_VELOCITY_PENALTY_COEF * 2.0, places=6)
+
+    def test_single_leg_support_reduces_locomotion_quality_without_blocking_progress(self):
+        env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
+        _set_ground_contact(env)
+        env.prev_potential = 0.0
+        env.quadruped.position[2] = -0.02
+
+        with _freeze_physics():
+            _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
+
+        self.assertFalse(done)
+        self.assertAlmostEqual(env.last_reward_components["contact_quality_scale"], CONTACT_QUALITY_SCALE_FLOOR, places=6)
+        self.assertAlmostEqual(
+            env.last_reward_components["locomotion_reward"],
+            PROGRESS_REWARD_COEF * 0.02 * CONTACT_QUALITY_SCALE_FLOOR,
+            places=6,
+        )
+        self.assertAlmostEqual(reward, env.last_reward_components["locomotion_reward"], places=6)
+
+    def test_action_change_penalty_discourages_command_dithering(self):
+        env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
+        _set_two_foot_contacts(env)
+        env.prev_action = np.ones(8, dtype=np.float32)
+        env.prev_potential = 0.0
+
+        with _freeze_physics():
+            _, reward, done, _ = env.step([-1, -1, -1, -1], [-1, -1, -1, -1])
+
+        self.assertFalse(done)
+        self.assertAlmostEqual(env.last_reward_components["action_delta_mean_abs"], 2.0, places=6)
+        self.assertAlmostEqual(
+            env.last_reward_components["action_change_penalty"],
+            -ACTION_CHANGE_PENALTY_COEF * 2.0,
+            places=6,
+        )
+        self.assertAlmostEqual(reward, env.last_reward_components["action_change_penalty"], places=6)
+
+    def test_foot_unused_penalty_starts_after_grace(self):
+        env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
+        _set_two_foot_contacts(env)
+        env.prev_potential = 0.0
+        env.consecutive_unused_foot_steps[:] = FOOT_UNUSED_GRACE_STEPS
+
+        with _freeze_physics():
+            _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
+
+        expected_normalized_excess_mean = 0.5 / FOOT_UNUSED_WINDOW_STEPS
+        self.assertFalse(done)
+        self.assertAlmostEqual(
+            env.last_reward_components["foot_unused_penalty"],
+            -FOOT_UNUSED_MAX_PENALTY * expected_normalized_excess_mean,
+            places=6,
+        )
+        self.assertAlmostEqual(reward, env.last_reward_components["foot_unused_penalty"], places=6)
+
+    def test_foot_slip_penalty_uses_contact_foot_planar_speed(self):
+        env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
+        env.quadruped.active_contact_indices = np.array([40, 56], dtype=np.int64)
+        env.prev_potential = 0.0
+
+        with patch.object(
+            env.quadruped,
+            "get_foot_center_velocities_local",
+            return_value=np.array(
+                [
+                    [FOOT_SLIP_SPEED_THRESHOLD + 1.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                    [FOOT_SLIP_SPEED_THRESHOLD + 3.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                dtype=np.float64,
+            ),
+        ):
+            with _freeze_physics():
+                _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
+
+        self.assertFalse(done)
+        self.assertAlmostEqual(
+            env.last_reward_components["foot_slip_penalty"],
+            -min(FOOT_SLIP_MAX_PENALTY, FOOT_SLIP_PENALTY_COEF * 2.0),
+            places=6,
+        )
+        self.assertAlmostEqual(reward, env.last_reward_components["foot_slip_penalty"], places=6)
 
     def test_forward_speed_without_position_progress_does_not_pay(self):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)

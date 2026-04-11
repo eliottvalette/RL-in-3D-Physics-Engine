@@ -74,6 +74,8 @@ class QuadrupedEnv:
         self.consecutive_steps_critical_tilt = 0
         self.consecutive_shoulder_limit_steps = np.zeros(4, dtype=np.int32)
         self.consecutive_elbow_limit_steps = np.zeros(4, dtype=np.int32)
+        self.consecutive_degenerate_support_steps = 0
+        self.consecutive_unused_foot_steps = np.zeros(4, dtype=np.int32)
         self.steps_since_contact = 0
         self.has_had_ground_contact = False
         self.steps_since_foot_contact = np.zeros(4, dtype=np.int32)
@@ -88,6 +90,8 @@ class QuadrupedEnv:
         self.consecutive_steps_critical_tilt = 0
         self.consecutive_shoulder_limit_steps.fill(0)
         self.consecutive_elbow_limit_steps.fill(0)
+        self.consecutive_degenerate_support_steps = 0
+        self.consecutive_unused_foot_steps.fill(0)
 
     def _compute_body_tilt_angles(self):
         body_up_world = self.quadruped.get_rotation_matrix()[:, 1]
@@ -129,6 +133,13 @@ class QuadrupedEnv:
         if exp_denominator <= 0.0:
             return -JOINT_LIMIT_PENALTY_COEF * normalized_progress
         return -JOINT_LIMIT_PENALTY_COEF * float(exp_numerator / exp_denominator)
+
+    @staticmethod
+    def _saturating_step_penalty(values, grace_steps, window_steps, max_penalty):
+        values = np.asarray(values, dtype=np.float64)
+        excess = np.maximum(values - float(grace_steps), 0.0)
+        normalized_excess = np.clip(excess / max(float(window_steps), 1.0), 0.0, 1.0)
+        return -float(max_penalty) * float(np.mean(normalized_excess))
 
     def reset_episode_state(self):
         self.prev_potential = None
@@ -382,6 +393,7 @@ class QuadrupedEnv:
                 "steps_since_contact": float(self.steps_since_contact),
                 "grounded_recently": 1.0,
                 "contact_reward_scale": 1.0,
+                "contact_quality_scale": 1.0,
                 "tilt_reward_scale": 1.0,
                 "height_reward_scale": 1.0,
                 "raw_pose_scale": 1.0,
@@ -389,6 +401,16 @@ class QuadrupedEnv:
                 "joint_limit_penalty": 0.0,
                 "joint_limit_push_steps_max": 0.0,
                 "joint_limit_push_active": 0.0,
+                "foot_slip_penalty": 0.0,
+                "foot_slip_speed_mean": 0.0,
+                "foot_slip_speed_max": 0.0,
+                "action_change_penalty": 0.0,
+                "action_delta_mean_abs": 0.0,
+                "support_degeneracy_penalty": 0.0,
+                "consecutive_degenerate_support_steps": 0.0,
+                "grounded_leg_count": 0.0,
+                "foot_unused_penalty": 0.0,
+                "foot_unused_steps_max": 0.0,
                 "forward_tilt_deg": 0.0,
                 "side_tilt_deg": 0.0,
             }
@@ -443,6 +465,11 @@ class QuadrupedEnv:
             foot_contact_mask,
             0,
             self.steps_since_foot_contact + 1,
+        )
+        self.consecutive_unused_foot_steps = np.where(
+            foot_contact_mask,
+            0,
+            self.consecutive_unused_foot_steps + 1,
         )
         grounded_recently = self.has_had_ground_contact and self.steps_since_contact <= CONTACT_GRACE_STEPS
         airborne_timeout = self.has_had_ground_contact and self.steps_since_contact > MAX_AIRBORNE_STEPS
@@ -499,6 +526,48 @@ class QuadrupedEnv:
         )
         joint_limit_penalty = self._compute_joint_limit_penalty(max_joint_limit_push_steps)
 
+        grounded_leg_count = int(np.count_nonzero(foot_contact_mask))
+        if grounded_leg_count < CONTACT_QUALITY_MIN_LEGS:
+            self.consecutive_degenerate_support_steps += 1
+        else:
+            self.consecutive_degenerate_support_steps = 0
+        contact_quality_scale = (
+            1.0
+            if grounded_leg_count >= CONTACT_QUALITY_MIN_LEGS
+            else CONTACT_QUALITY_SCALE_FLOOR
+        )
+        support_degeneracy_penalty = self._saturating_step_penalty(
+            [self.consecutive_degenerate_support_steps],
+            SUPPORT_DEGENERACY_GRACE_STEPS,
+            SUPPORT_DEGENERACY_WINDOW_STEPS,
+            SUPPORT_DEGENERACY_MAX_PENALTY,
+        )
+
+        foot_velocities = self.quadruped.get_foot_center_velocities_local()
+        foot_planar_speeds = np.linalg.norm(foot_velocities[:, [0, 2]], axis=1)
+        contact_planar_speeds = foot_planar_speeds[foot_contact_mask]
+        if contact_planar_speeds.size:
+            slip_excess = np.maximum(contact_planar_speeds - FOOT_SLIP_SPEED_THRESHOLD, 0.0)
+            foot_slip_penalty = -min(
+                FOOT_SLIP_MAX_PENALTY,
+                FOOT_SLIP_PENALTY_COEF * float(np.mean(slip_excess)),
+            )
+            foot_slip_speed_mean = float(np.mean(contact_planar_speeds))
+            foot_slip_speed_max = float(np.max(contact_planar_speeds))
+        else:
+            foot_slip_penalty = 0.0
+            foot_slip_speed_mean = 0.0
+            foot_slip_speed_max = 0.0
+
+        action_delta = current_action - self.prev_action
+        action_change_penalty = -ACTION_CHANGE_PENALTY_COEF * float(np.mean(np.abs(action_delta)))
+        foot_unused_penalty = self._saturating_step_penalty(
+            self.consecutive_unused_foot_steps,
+            FOOT_UNUSED_GRACE_STEPS,
+            FOOT_UNUSED_WINDOW_STEPS,
+            FOOT_UNUSED_MAX_PENALTY,
+        )
+
         tilt_reward_scale = self._soft_reward_scale(
             CRITICAL_TILT_ANGLE - max_tilt,
             TILT_SOFT_REWARD_MARGIN,
@@ -508,7 +577,7 @@ class QuadrupedEnv:
             HEIGHT_SOFT_REWARD_MARGIN,
         )
         raw_pose_scale = min(tilt_reward_scale, height_reward_scale)
-        locomotion_reward_scale = raw_pose_scale
+        locomotion_reward_scale = min(raw_pose_scale, contact_quality_scale)
 
         joint_limit_timeout = (
             int(self.consecutive_shoulder_limit_steps.max()) > MAX_CONSECUTIVE_JOINT_LIMIT_STEPS
@@ -548,7 +617,15 @@ class QuadrupedEnv:
         if done:
             reward = terminal_event_reward
         else:
-            reward = locomotion_reward + angular_velocity_penalty + joint_limit_penalty
+            reward = (
+                locomotion_reward
+                + angular_velocity_penalty
+                + joint_limit_penalty
+                + foot_slip_penalty
+                + action_change_penalty
+                + support_degeneracy_penalty
+                + foot_unused_penalty
+            )
             self.cumulative_locomotion_reward += locomotion_reward
         self.last_reward_components = {
             "distance_reward": float(distance_reward),
@@ -566,6 +643,7 @@ class QuadrupedEnv:
             "steps_since_contact": float(self.steps_since_contact),
             "grounded_recently": 1.0 if grounded_recently else 0.0,
             "contact_reward_scale": 1.0 if grounded_recently else 0.0,
+            "contact_quality_scale": float(contact_quality_scale),
             "tilt_reward_scale": float(tilt_reward_scale),
             "height_reward_scale": float(height_reward_scale),
             "raw_pose_scale": float(raw_pose_scale),
@@ -573,6 +651,16 @@ class QuadrupedEnv:
             "joint_limit_penalty": float(joint_limit_penalty),
             "joint_limit_push_steps_max": float(max_joint_limit_push_steps),
             "joint_limit_push_active": 1.0 if max_joint_limit_push_steps > 0 else 0.0,
+            "foot_slip_penalty": float(foot_slip_penalty),
+            "foot_slip_speed_mean": float(foot_slip_speed_mean),
+            "foot_slip_speed_max": float(foot_slip_speed_max),
+            "action_change_penalty": float(action_change_penalty),
+            "action_delta_mean_abs": float(np.mean(np.abs(action_delta))),
+            "support_degeneracy_penalty": float(support_degeneracy_penalty),
+            "consecutive_degenerate_support_steps": float(self.consecutive_degenerate_support_steps),
+            "grounded_leg_count": float(grounded_leg_count),
+            "foot_unused_penalty": float(foot_unused_penalty),
+            "foot_unused_steps_max": float(self.consecutive_unused_foot_steps.max()),
             "forward_tilt_deg": float(np.degrees(forward_tilt)),
             "side_tilt_deg": float(np.degrees(side_tilt)),
         }

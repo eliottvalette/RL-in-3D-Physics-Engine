@@ -1,6 +1,7 @@
 import pygame
 from pygame.locals import *
 from agent import QuadrupedAgent
+from physics_env.diagnostics.gait_eval import run_gait_debug_eval
 from physics_env.envs.quadruped_env import QuadrupedEnv
 from physics_env.core.config import *
 import torch
@@ -66,6 +67,9 @@ def build_test_agent():
 def main():
     agent = build_test_agent()
     env = QuadrupedEnv(rendering=True)
+    if DEBUG_GAIT_EVAL:
+        run_gait_debug_eval(agent, env, render=env.rendering)
+        return
     test_agent(agent, env)
 
 if __name__ == "__main__":
