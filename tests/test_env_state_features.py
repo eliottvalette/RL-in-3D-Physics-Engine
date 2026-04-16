@@ -111,7 +111,7 @@ class EnvStateFeaturesTest(unittest.TestCase):
         components = quadruped.get_state_components()
         expected_com_velocity = quadruped.get_center_of_mass_velocity()
         expected_task_velocity = np.array(
-            [expected_com_velocity[0], expected_com_velocity[1], -expected_com_velocity[2]],
+            [expected_com_velocity[0], expected_com_velocity[1], expected_com_velocity[2]],
             dtype=np.float32,
         )
 
@@ -119,7 +119,7 @@ class EnvStateFeaturesTest(unittest.TestCase):
         expected_body_height_error = 5.5 - 0.5 * (MIN_BODY_HEIGHT + MAX_BODY_HEIGHT)
         self.assertAlmostEqual(float(components["body_height_error"][0]), expected_body_height_error, places=6)
         np.testing.assert_allclose(components["gravity_body"], np.array([0.0, -1.0, 0.0], dtype=np.float32), atol=1e-6)
-        np.testing.assert_allclose(components["task_forward_body"], np.array([0.0, 0.0, -1.0], dtype=np.float32), atol=1e-6)
+        np.testing.assert_allclose(components["task_forward_body"], np.array([0.0, 0.0, 1.0], dtype=np.float32), atol=1e-6)
         np.testing.assert_allclose(components["linear_velocity_task"], expected_task_velocity, atol=1e-6)
         expected_joint_limit_fraction = np.concatenate(
             [

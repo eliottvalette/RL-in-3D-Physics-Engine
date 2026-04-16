@@ -63,7 +63,7 @@ class BenchRunnerTest(unittest.TestCase):
         )
 
         self.assertEqual(metrics["scenario"], "policy:env_reset")
-        self.assertGreater(metrics["initial_body_height"], 5.49)
+        self.assertAlmostEqual(metrics["initial_body_height"], 4.5, delta=0.05)
 
 
 if __name__ == "__main__":

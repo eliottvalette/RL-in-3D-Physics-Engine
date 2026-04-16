@@ -20,6 +20,7 @@ from physics_env.core.config import (
     DT,
     PHYSICS_HZ,
     RENDER_FPS,
+    TASK_FORWARD_Z_SIGN,
     UNIT_SCALE_M,
 )
 from physics_env.envs.quadruped_env import QuadrupedEnv
@@ -126,6 +127,23 @@ def _positive_share(values: np.ndarray, mask: np.ndarray) -> float:
     return float(np.sum(positives[mask]) / total)
 
 
+def _component_share_by_leg(values: np.ndarray, positive_only: bool = False) -> dict[str, float]:
+    values = np.asarray(values, dtype=np.float64)
+    if values.ndim == 2:
+        totals = np.sum(values, axis=0)
+    else:
+        totals = values
+    if positive_only:
+        totals = np.maximum(totals, 0.0)
+    denominator = float(np.sum(totals))
+    if denominator <= 1e-9:
+        return {leg_name: 0.0 for leg_name in LEG_NAMES}
+    return {
+        leg_name: float(totals[leg_idx] / denominator)
+        for leg_idx, leg_name in enumerate(LEG_NAMES)
+    }
+
+
 def _run_durations_s(mask: np.ndarray, target_value: bool) -> list[float]:
     durations: list[float] = []
     current_length = 0
@@ -182,10 +200,10 @@ def _sample_step(
         "done_reason": str(env.last_done_reason),
         "step_wall_time_s": float(step_time),
         "state_value": None if state_value is None else float(state_value),
-        "forward_progress_units": -float(env.quadruped.position[2]),
-        "forward_progress_m": -float(env.quadruped.position[2]) * UNIT_SCALE_M,
-        "forward_speed_units_s": -float(env.quadruped.velocity[2]),
-        "forward_speed_m_s": -float(env.quadruped.velocity[2]) * UNIT_SCALE_M,
+        "forward_progress_units": TASK_FORWARD_Z_SIGN * float(env.quadruped.position[2]),
+        "forward_progress_m": TASK_FORWARD_Z_SIGN * float(env.quadruped.position[2]) * UNIT_SCALE_M,
+        "forward_speed_units_s": TASK_FORWARD_Z_SIGN * float(env.quadruped.velocity[2]),
+        "forward_speed_m_s": TASK_FORWARD_Z_SIGN * float(env.quadruped.velocity[2]) * UNIT_SCALE_M,
         "body_height_units": float(env.quadruped.position[1]),
         "body_height_m": float(env.quadruped.position[1]) * UNIT_SCALE_M,
         "body_vertical_speed_units_s": float(env.quadruped.velocity[1]),
@@ -204,6 +222,14 @@ def _sample_step(
         "foot_heights_world_m": (foot_heights * UNIT_SCALE_M).astype(float).tolist(),
         "foot_positions_body_units": foot_positions_body.astype(float).reshape(-1).tolist(),
         "foot_velocities_body_units_s": foot_velocities_body.astype(float).reshape(-1).tolist(),
+        "contact_normal_impulses_by_leg": env.quadruped.last_contact_normal_impulses_by_leg.astype(float).tolist(),
+        "contact_tangent_impulses_by_leg": env.quadruped.last_contact_tangent_impulses_by_leg.astype(float).reshape(-1).tolist(),
+        "contact_tangent_forward_impulses_by_leg": (
+            env.quadruped.last_contact_tangent_forward_impulses_by_leg.astype(float).tolist()
+        ),
+        "contact_tangent_lateral_impulses_by_leg": (
+            env.quadruped.last_contact_tangent_lateral_impulses_by_leg.astype(float).tolist()
+        ),
         "shoulder_angles": env.quadruped.shoulder_angles.astype(float).tolist(),
         "elbow_angles": env.quadruped.elbow_angles.astype(float).tolist(),
         "shoulder_velocities": env.quadruped.shoulder_velocities.astype(float).tolist(),
@@ -258,6 +284,22 @@ def _summarize_episode(samples: list[dict[str, Any]]) -> dict[str, Any]:
         len(samples),
         4,
         3,
+    )
+    contact_normal_impulses = np.asarray(
+        [sample["contact_normal_impulses_by_leg"] for sample in samples],
+        dtype=np.float64,
+    )
+    contact_tangent_impulses = np.asarray(
+        [sample["contact_tangent_impulses_by_leg"] for sample in samples],
+        dtype=np.float64,
+    ).reshape(len(samples), 4, 3)
+    contact_forward_impulses = np.asarray(
+        [sample["contact_tangent_forward_impulses_by_leg"] for sample in samples],
+        dtype=np.float64,
+    )
+    contact_lateral_impulses = np.asarray(
+        [sample["contact_tangent_lateral_impulses_by_leg"] for sample in samples],
+        dtype=np.float64,
     )
     foot_planar_speed = np.linalg.norm(foot_velocities[:, :, [0, 2]], axis=2)
     contact_planar_speed = foot_planar_speed[contacts > 0.5]
@@ -327,6 +369,51 @@ def _summarize_episode(samples: list[dict[str, Any]]) -> dict[str, Any]:
     rear_positive_accel_share = float(sum(per_leg_positive_accel_share[LEG_NAMES[idx]] for idx in REAR_LEGS))
     front_positive_progress_share = float(sum(per_leg_positive_progress_share[LEG_NAMES[idx]] for idx in FRONT_LEGS))
     rear_positive_progress_share = float(sum(per_leg_positive_progress_share[LEG_NAMES[idx]] for idx in REAR_LEGS))
+    contact_tangent_norm = np.linalg.norm(contact_tangent_impulses, axis=2)
+    positive_contact_forward_impulses = np.maximum(contact_forward_impulses, 0.0)
+    abs_contact_forward_impulses = np.abs(contact_forward_impulses)
+    per_leg_contact_normal_impulse_sum = {
+        leg_name: float(np.sum(contact_normal_impulses[:, leg_idx]))
+        for leg_idx, leg_name in enumerate(LEG_NAMES)
+    }
+    per_leg_contact_tangent_impulse_norm_sum = {
+        leg_name: float(np.sum(contact_tangent_norm[:, leg_idx]))
+        for leg_idx, leg_name in enumerate(LEG_NAMES)
+    }
+    per_leg_contact_forward_impulse_sum = {
+        leg_name: float(np.sum(contact_forward_impulses[:, leg_idx]))
+        for leg_idx, leg_name in enumerate(LEG_NAMES)
+    }
+    per_leg_contact_positive_forward_impulse_sum = {
+        leg_name: float(np.sum(positive_contact_forward_impulses[:, leg_idx]))
+        for leg_idx, leg_name in enumerate(LEG_NAMES)
+    }
+    per_leg_contact_abs_forward_impulse_sum = {
+        leg_name: float(np.sum(abs_contact_forward_impulses[:, leg_idx]))
+        for leg_idx, leg_name in enumerate(LEG_NAMES)
+    }
+    per_leg_contact_lateral_impulse_sum = {
+        leg_name: float(np.sum(contact_lateral_impulses[:, leg_idx]))
+        for leg_idx, leg_name in enumerate(LEG_NAMES)
+    }
+    per_leg_contact_positive_forward_impulse_share = _component_share_by_leg(
+        contact_forward_impulses,
+        positive_only=True,
+    )
+    per_leg_contact_abs_forward_impulse_share = _component_share_by_leg(abs_contact_forward_impulses)
+    per_leg_contact_normal_impulse_share = _component_share_by_leg(contact_normal_impulses)
+    front_contact_positive_forward_impulse_share = float(
+        sum(per_leg_contact_positive_forward_impulse_share[LEG_NAMES[idx]] for idx in FRONT_LEGS)
+    )
+    rear_contact_positive_forward_impulse_share = float(
+        sum(per_leg_contact_positive_forward_impulse_share[LEG_NAMES[idx]] for idx in REAR_LEGS)
+    )
+    front_contact_abs_forward_impulse_share = float(
+        sum(per_leg_contact_abs_forward_impulse_share[LEG_NAMES[idx]] for idx in FRONT_LEGS)
+    )
+    rear_contact_abs_forward_impulse_share = float(
+        sum(per_leg_contact_abs_forward_impulse_share[LEG_NAMES[idx]] for idx in REAR_LEGS)
+    )
     reward_breakdown = _reward_breakdown(samples)
 
     return {
@@ -385,6 +472,19 @@ def _summarize_episode(samples: list[dict[str, Any]]) -> dict[str, Any]:
         "rear_positive_accel_share": rear_positive_accel_share,
         "front_positive_progress_share": front_positive_progress_share,
         "rear_positive_progress_share": rear_positive_progress_share,
+        "per_leg_contact_normal_impulse_sum": per_leg_contact_normal_impulse_sum,
+        "per_leg_contact_tangent_impulse_norm_sum": per_leg_contact_tangent_impulse_norm_sum,
+        "per_leg_contact_forward_impulse_sum": per_leg_contact_forward_impulse_sum,
+        "per_leg_contact_positive_forward_impulse_sum": per_leg_contact_positive_forward_impulse_sum,
+        "per_leg_contact_abs_forward_impulse_sum": per_leg_contact_abs_forward_impulse_sum,
+        "per_leg_contact_lateral_impulse_sum": per_leg_contact_lateral_impulse_sum,
+        "per_leg_contact_positive_forward_impulse_share": per_leg_contact_positive_forward_impulse_share,
+        "per_leg_contact_abs_forward_impulse_share": per_leg_contact_abs_forward_impulse_share,
+        "per_leg_contact_normal_impulse_share": per_leg_contact_normal_impulse_share,
+        "front_contact_positive_forward_impulse_share": front_contact_positive_forward_impulse_share,
+        "rear_contact_positive_forward_impulse_share": rear_contact_positive_forward_impulse_share,
+        "front_contact_abs_forward_impulse_share": front_contact_abs_forward_impulse_share,
+        "rear_contact_abs_forward_impulse_share": rear_contact_abs_forward_impulse_share,
         "stance_duration_mean_s": {
             leg_name: _mean(np.asarray(_run_durations_s(contacts[:, leg_idx] > 0.5, True), dtype=np.float64))
             for leg_idx, leg_name in enumerate(LEG_NAMES)
@@ -493,6 +593,10 @@ def _summarize_global(episode_summaries: list[dict[str, Any]]) -> dict[str, Any]
         "rear_positive_accel_share",
         "front_positive_progress_share",
         "rear_positive_progress_share",
+        "front_contact_positive_forward_impulse_share",
+        "rear_contact_positive_forward_impulse_share",
+        "front_contact_abs_forward_impulse_share",
+        "rear_contact_abs_forward_impulse_share",
         "contact_foot_planar_speed_p95_units_s",
     ]
     summary: dict[str, Any] = {
@@ -542,6 +646,42 @@ def _summarize_global(episode_summaries: list[dict[str, Any]]) -> dict[str, Any]
     )
     summary["per_leg_action_switches_s_mean"] = _dict_mean(
         [item["per_leg_action_switches_s"] for item in episode_summaries],
+        LEG_NAMES,
+    )
+    summary["per_leg_contact_normal_impulse_sum"] = _dict_sum(
+        [item["per_leg_contact_normal_impulse_sum"] for item in episode_summaries],
+        LEG_NAMES,
+    )
+    summary["per_leg_contact_tangent_impulse_norm_sum"] = _dict_sum(
+        [item["per_leg_contact_tangent_impulse_norm_sum"] for item in episode_summaries],
+        LEG_NAMES,
+    )
+    summary["per_leg_contact_forward_impulse_sum"] = _dict_sum(
+        [item["per_leg_contact_forward_impulse_sum"] for item in episode_summaries],
+        LEG_NAMES,
+    )
+    summary["per_leg_contact_positive_forward_impulse_sum"] = _dict_sum(
+        [item["per_leg_contact_positive_forward_impulse_sum"] for item in episode_summaries],
+        LEG_NAMES,
+    )
+    summary["per_leg_contact_abs_forward_impulse_sum"] = _dict_sum(
+        [item["per_leg_contact_abs_forward_impulse_sum"] for item in episode_summaries],
+        LEG_NAMES,
+    )
+    summary["per_leg_contact_lateral_impulse_sum"] = _dict_sum(
+        [item["per_leg_contact_lateral_impulse_sum"] for item in episode_summaries],
+        LEG_NAMES,
+    )
+    summary["per_leg_contact_positive_forward_impulse_share_mean"] = _dict_mean(
+        [item["per_leg_contact_positive_forward_impulse_share"] for item in episode_summaries],
+        LEG_NAMES,
+    )
+    summary["per_leg_contact_abs_forward_impulse_share_mean"] = _dict_mean(
+        [item["per_leg_contact_abs_forward_impulse_share"] for item in episode_summaries],
+        LEG_NAMES,
+    )
+    summary["per_leg_contact_normal_impulse_share_mean"] = _dict_mean(
+        [item["per_leg_contact_normal_impulse_share"] for item in episode_summaries],
         LEG_NAMES,
     )
     support_pattern_sum = _dict_sum(
@@ -753,6 +893,31 @@ def print_gait_eval_report(result: GaitEvalResult, json_path: str | None) -> Non
         f"rear_action_abs_share_mean={global_summary.get('rear_action_abs_share_mean', 0.0):.4f}",
     )
 
+    print("\n[GAIT DEBUG] Contact Impulse Summary")
+    print(
+        "[GAIT DEBUG] normal_impulse_share:",
+        _format_dict(global_summary.get("per_leg_contact_normal_impulse_share_mean", {}), precision=4),
+    )
+    print(
+        "[GAIT DEBUG] positive_forward_impulse_share:",
+        _format_dict(global_summary.get("per_leg_contact_positive_forward_impulse_share_mean", {}), precision=4),
+    )
+    print(
+        "[GAIT DEBUG] abs_forward_impulse_share:",
+        _format_dict(global_summary.get("per_leg_contact_abs_forward_impulse_share_mean", {}), precision=4),
+    )
+    print(
+        "[GAIT DEBUG] forward_impulse_sum:",
+        _format_dict(global_summary.get("per_leg_contact_forward_impulse_sum", {}), precision=4),
+    )
+    print(
+        "[GAIT DEBUG]",
+        f"front_positive_forward_impulse_share={global_summary.get('front_contact_positive_forward_impulse_share_mean', 0.0):.4f}",
+        f"rear_positive_forward_impulse_share={global_summary.get('rear_contact_positive_forward_impulse_share_mean', 0.0):.4f}",
+        f"front_abs_forward_impulse_share={global_summary.get('front_contact_abs_forward_impulse_share_mean', 0.0):.4f}",
+        f"rear_abs_forward_impulse_share={global_summary.get('rear_contact_abs_forward_impulse_share_mean', 0.0):.4f}",
+    )
+
     print("\n[GAIT DEBUG] Reward Breakdown")
     print(
         "[GAIT DEBUG]",
@@ -803,6 +968,10 @@ def print_gait_eval_report(result: GaitEvalResult, json_path: str | None) -> Non
                     precision=4,
                 ),
             )
+            print(
+                "[GAIT DEBUG]   forward_impulse_share:",
+                _format_dict(episode["per_leg_contact_positive_forward_impulse_share"], precision=4),
+            )
     else:
         print("\n[GAIT DEBUG] Episodes: hidden; set DEBUG_GAIT_EVAL_PRINT_EPISODES=True for per-episode terminal details.")
 
@@ -813,6 +982,8 @@ def print_gait_eval_report(result: GaitEvalResult, json_path: str | None) -> Non
     print("[GAIT DEBUG] action_switches_per_joint_s measures command dithering rate normalized by simulated seconds.")
     print("[GAIT DEBUG] reward_abs_responsibility uses absolute component magnitudes, so it shows domination even when signs cancel.")
     print("[GAIT DEBUG] propulsion_proxy uses body forward acceleration/progress crossed with contact patterns; it is not a contact-force measurement.")
+    task_forward_label = "+world_z" if TASK_FORWARD_Z_SIGN > 0.0 else "-world_z"
+    print(f"[GAIT DEBUG] contact_impulse is measured from solver impulses; positive_forward is along task forward ({task_forward_label}).")
 
 
 def save_gait_eval_json(result: GaitEvalResult, output_path: str) -> str:
@@ -832,6 +1003,7 @@ def run_gait_debug_eval(agent, env: QuadrupedEnv, render: bool = True) -> GaitEv
     episode_summaries: list[dict[str, Any]] = []
 
     for episode_idx in range(DEBUG_GAIT_EVAL_EPISODES):
+        print(f"Running episode {episode_idx + 1}/{DEBUG_GAIT_EVAL_EPISODES}") # Stop deleting this line
         state = env.reset_episode(pose_jitter=True)
         episode_samples: list[dict[str, Any]] = []
         camera_actions = [0] * 10

@@ -3,7 +3,7 @@ import numpy as np
 
 from ..core.config import CONTACT_BIAS, CONTACT_MANIFOLD_MIN_XZ_SPACING, CONTACT_POSITION_CORRECTION
 from ..core.config import CONTACT_SLOP, CONTACT_THRESHOLD_BASE, CONTACT_THRESHOLD_MULTIPLIER, DEBUG_CONTACT
-from ..core.config import DT, GRAVITY, MAX_ANGULAR_VELOCITY, MAX_CONTACT_POINTS
+from ..core.config import DT, GRAVITY, MAX_ANGULAR_VELOCITY, MAX_CONTACT_POINTS, TASK_FORWARD_Z_SIGN
 from ..core.config import FRICTION, MAX_VELOCITY, NORMAL_SOLVER_ITERATIONS
 from .quadruped import Quadruped
 from ..core.helpers import limit_vector
@@ -91,6 +91,32 @@ def _apply_impulse(
     quadruped.velocity = com_velocity - np.cross(quadruped.angular_velocity, com_offset_world)
 
 
+def _record_contact_impulses(
+    quadruped: Quadruped,
+    contact_indices: np.ndarray,
+    normal_impulses: np.ndarray,
+    tangent_impulses: np.ndarray,
+):
+    quadruped.last_contact_normal_impulses_by_leg.fill(0.0)
+    quadruped.last_contact_tangent_impulses_by_leg.fill(0.0)
+    quadruped.last_contact_tangent_forward_impulses_by_leg.fill(0.0)
+    quadruped.last_contact_tangent_lateral_impulses_by_leg.fill(0.0)
+
+    for local_idx, vertex_idx in enumerate(contact_indices.tolist()):
+        part_index = int(vertex_idx // 8)
+        if not 5 <= part_index <= 8:
+            continue
+
+        leg_idx = part_index - 5
+        tangent_impulse = tangent_impulses[local_idx]
+        quadruped.last_contact_normal_impulses_by_leg[leg_idx] += float(normal_impulses[local_idx])
+        quadruped.last_contact_tangent_impulses_by_leg[leg_idx] += tangent_impulse
+        quadruped.last_contact_tangent_lateral_impulses_by_leg[leg_idx] += float(tangent_impulse[0])
+        quadruped.last_contact_tangent_forward_impulses_by_leg[leg_idx] += (
+            TASK_FORWARD_Z_SIGN * float(tangent_impulse[2])
+        )
+
+
 def _solve_contact_constraints(
     quadruped: Quadruped,
     current_vertices: np.ndarray,
@@ -102,6 +128,12 @@ def _solve_contact_constraints(
     contact_indices = _select_contact_indices(current_vertices, contact_threshold)
     quadruped.active_contact_indices = contact_indices.copy()
     if contact_indices.size == 0:
+        _record_contact_impulses(
+            quadruped=quadruped,
+            contact_indices=contact_indices,
+            normal_impulses=np.empty(0, dtype=np.float64),
+            tangent_impulses=np.empty((0, 3), dtype=np.float64),
+        )
         return current_vertices
 
     accumulated_normal_impulses = np.zeros(contact_indices.shape[0], dtype=np.float64)
@@ -211,6 +243,13 @@ def _solve_contact_constraints(
             f"[CONTACT N] points={contact_indices.size} max_pen={max_penetration:.5f} "
             f"vel={quadruped.velocity} ang={quadruped.angular_velocity}"
         )
+
+    _record_contact_impulses(
+        quadruped=quadruped,
+        contact_indices=contact_indices,
+        normal_impulses=accumulated_normal_impulses,
+        tangent_impulses=accumulated_tangent_impulses,
+    )
 
     return current_vertices
 

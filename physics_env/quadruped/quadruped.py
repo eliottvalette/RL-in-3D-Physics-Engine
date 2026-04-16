@@ -101,6 +101,10 @@ class Quadruped:
         self.prev_local_transformed_vertices = None
         self.last_local_articulation_velocities = np.zeros((len(self.vertices), 3), dtype=np.float64)
         self.active_contact_indices = np.empty(0, dtype=np.int64)
+        self.last_contact_normal_impulses_by_leg = np.zeros(4, dtype=np.float64)
+        self.last_contact_tangent_impulses_by_leg = np.zeros((4, 3), dtype=np.float64)
+        self.last_contact_tangent_forward_impulses_by_leg = np.zeros(4, dtype=np.float64)
+        self.last_contact_tangent_lateral_impulses_by_leg = np.zeros(4, dtype=np.float64)
         self._needs_update = True
         self.rotated_vertices = None
         self.local_transformed_vertices = None
@@ -137,6 +141,10 @@ class Quadruped:
         self.prev_local_transformed_vertices = None
         self.last_local_articulation_velocities = np.zeros((len(self.vertices), 3), dtype=np.float64)
         self.active_contact_indices = np.empty(0, dtype=np.int64)
+        self.last_contact_normal_impulses_by_leg.fill(0.0)
+        self.last_contact_tangent_impulses_by_leg.fill(0.0)
+        self.last_contact_tangent_forward_impulses_by_leg.fill(0.0)
+        self.last_contact_tangent_lateral_impulses_by_leg.fill(0.0)
         self._needs_update = True
         self.rotated_vertices = self.get_vertices()
         self.prev_local_transformed_vertices = self.local_transformed_vertices.copy()
@@ -156,6 +164,10 @@ class Quadruped:
         self.prev_local_transformed_vertices = None
         self.last_local_articulation_velocities = np.zeros((len(self.vertices), 3), dtype=np.float64)
         self.active_contact_indices = np.empty(0, dtype=np.int64)
+        self.last_contact_normal_impulses_by_leg.fill(0.0)
+        self.last_contact_tangent_impulses_by_leg.fill(0.0)
+        self.last_contact_tangent_forward_impulses_by_leg.fill(0.0)
+        self.last_contact_tangent_lateral_impulses_by_leg.fill(0.0)
         self._needs_update = True
         self.rotated_vertices = self.get_vertices()
         self.prev_local_transformed_vertices = self.local_transformed_vertices.copy()
@@ -451,13 +463,17 @@ class Quadruped:
 
         gravity_norm = float(np.linalg.norm(GRAVITY))
         gravity_direction_world = GRAVITY / gravity_norm if gravity_norm > 1e-12 else np.array([0.0, -1.0, 0.0], dtype=np.float64)
-        task_forward_world = np.array([0.0, 0.0, -1.0], dtype=np.float64)
+        task_forward_world = TASK_FORWARD_WORLD
         rotation_matrix = self.get_rotation_matrix()
         world_to_body = rotation_matrix.T
         com_offset_world = rotation_matrix @ self.local_center_of_mass
         center_of_mass_velocity_world = self.velocity + np.cross(self.angular_velocity, com_offset_world)
         task_frame_velocity = np.array(
-            [center_of_mass_velocity_world[0], center_of_mass_velocity_world[1], -center_of_mass_velocity_world[2]],
+            [
+                center_of_mass_velocity_world[0],
+                center_of_mass_velocity_world[1],
+                TASK_FORWARD_Z_SIGN * center_of_mass_velocity_world[2],
+            ],
             dtype=np.float64,
         )
         joint_limit_fraction = np.concatenate(

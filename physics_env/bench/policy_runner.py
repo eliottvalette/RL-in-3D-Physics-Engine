@@ -15,6 +15,7 @@ from physics_env.core.config import (
     PHYSICS_STEPS_PER_RENDER,
     RENDER_FPS,
     STATE_SIZE,
+    TASK_FORWARD_Z_SIGN,
     set_seed,
 )
 from physics_env.envs.quadruped_env import QuadrupedEnv
@@ -209,7 +210,9 @@ def run_policy_bench(
                 "model_path": str(model_path) if agent is None else "<provided-agent>",
                 "initial_scenario": initial_scenario,
                 "deterministic_policy": deterministic,
-                "final_forward_progress": payload["initial_position_z"] - payload["final_position_z"],
+                "final_forward_progress": TASK_FORWARD_Z_SIGN * (
+                    payload["final_position_z"] - payload["initial_position_z"]
+                ),
             }
         )
         return payload

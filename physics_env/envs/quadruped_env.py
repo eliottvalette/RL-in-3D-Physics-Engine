@@ -435,7 +435,7 @@ class QuadrupedEnv:
         )
         # ---- REWARD ---
         # ----------  a) progression avant signee --------------
-        forward_progress = -float(self.quadruped.position[2])
+        forward_progress = TASK_FORWARD_Z_SIGN * float(self.quadruped.position[2])
         progress_delta = 0.0
         if self.prev_potential is None:
             raw_distance_reward = 0.0
@@ -445,7 +445,7 @@ class QuadrupedEnv:
         self.prev_potential = forward_progress
 
         # ----------  b) metriques de mouvement et posture -------------------------
-        forward_speed = -float(self.quadruped.velocity[2])
+        forward_speed = TASK_FORWARD_Z_SIGN * float(self.quadruped.velocity[2])
 
         forward_tilt, side_tilt = self._compute_body_tilt_angles()
         max_tilt = max(forward_tilt, side_tilt)

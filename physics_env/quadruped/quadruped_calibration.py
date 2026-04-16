@@ -59,6 +59,7 @@ LOWER_LEG_CENTER_OFFSETS = (
 )
 
 
-# Python-side rest pose starts from neutral joint angles.
-INITIAL_SHOULDER_ANGLES = np.array([-0.6, -0.6, -0.6, -0.6], dtype=np.float64)
-INITIAL_ELBOW_ANGLES = np.array([1.5, 1.5, 1.5, 1.5], dtype=np.float64)
+# Python-side rest pose, ordered as front_right, front_left, back_right, back_left.
+# This is the old symmetric pose expressed in the flipped joint-angle convention.
+INITIAL_SHOULDER_ANGLES = np.array([0.6, 0.6, 0.6, 0.6], dtype=np.float64)
+INITIAL_ELBOW_ANGLES = np.array([-1.5, -1.5, -1.5, -1.5], dtype=np.float64)

@@ -16,6 +16,7 @@ from physics_env.core.config import (
     PLOT_INTERVAL,
     ROLLOUT_STEPS,
     SAVE_INTERVAL,
+    TASK_FORWARD_Z_SIGN,
 )
 from physics_env.envs.quadruped_env import QuadrupedEnv
 from visualization import DataCollector
@@ -107,7 +108,7 @@ def run_episode(env: QuadrupedEnv, agent: QuadrupedAgent, rendering: bool, episo
     summary = {
         "steps_count": float(steps_count),
         "episode_reward": float(episode_reward),
-        "forward_progress": float(max(0.0, -float(env.quadruped.position[2]))),
+        "forward_progress": float(max(0.0, TASK_FORWARD_Z_SIGN * float(env.quadruped.position[2]))),
         "mean_locomotion_reward_scale": float(np.mean(locomotion_scales)) if locomotion_scales else None,
         "terminal_reason": env.last_done_reason,
     }
@@ -139,7 +140,7 @@ def run_evaluation_episode(agent: QuadrupedAgent, env: QuadrupedEnv):
 
     eval_metrics = {
         "eval_episode_reward": float(episode_reward),
-        "eval_forward_progress": float(max(0.0, -float(env.quadruped.position[2]))),
+        "eval_forward_progress": float(max(0.0, TASK_FORWARD_Z_SIGN * float(env.quadruped.position[2]))),
         "eval_mean_locomotion_scale": float(np.mean(locomotion_scales)) if locomotion_scales else None,
         "eval_clean_episode": 1.0 if not any(event_flags.values()) else 0.0,
         "eval_too_low": 1.0 if event_flags["too_low"] else 0.0,

@@ -26,6 +26,13 @@ const LEG_TO_JOINTS: Record<
   back_right: { shoulder: "back_right_shoulder", elbow: "back_right_elbow" },
 };
 
+const FRONT_LEG_COLOR = "#ff2b2b";
+const BACK_LEG_COLOR = "#2f6bff";
+
+function getLegDebugColor(legName: BoxLegName): string {
+  return legName.startsWith("front_") ? FRONT_LEG_COLOR : BACK_LEG_COLOR;
+}
+
 function DebugLeg({
   legName,
   anchor,
@@ -65,6 +72,7 @@ function DebugLeg({
       ),
     [lowerLegRestAxisAngle],
   );
+  const legColor = getLegDebugColor(legName);
 
   return (
     <group position={anchor}>
@@ -76,7 +84,7 @@ function DebugLeg({
         <group quaternion={upperLegQuaternion}>
           <mesh position={upperLegCenterOffset}>
             <boxGeometry args={upperLegSize} />
-            <meshBasicMaterial color="#ffffff" wireframe transparent opacity={0.65} />
+            <meshBasicMaterial color={legColor} wireframe transparent opacity={0.85} />
           </mesh>
           <group
             position={elbowOffset}
@@ -87,7 +95,7 @@ function DebugLeg({
             <group quaternion={lowerLegQuaternion}>
               <mesh position={lowerLegCenterOffset}>
                 <boxGeometry args={lowerLegSize} />
-                <meshBasicMaterial color="#d9d9d9" wireframe transparent opacity={0.65} />
+                <meshBasicMaterial color={legColor} wireframe transparent opacity={0.85} />
               </mesh>
             </group>
           </group>

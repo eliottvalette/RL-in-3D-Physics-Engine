@@ -48,7 +48,7 @@ class TerminalRewardsTest(unittest.TestCase):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
         env.prev_potential = 0.0
         env.quadruped.position[1] = MIN_BODY_HEIGHT - 0.1
-        env.quadruped.position[2] = -0.5
+        env.quadruped.position[2] = 0.5
 
         with _freeze_physics():
             _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
@@ -62,7 +62,7 @@ class TerminalRewardsTest(unittest.TestCase):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
         env.prev_potential = 0.0
         env.quadruped.position[1] = MAX_BODY_HEIGHT + 0.1
-        env.quadruped.position[2] = -0.5
+        env.quadruped.position[2] = 0.5
 
         with _freeze_physics():
             _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
@@ -75,7 +75,7 @@ class TerminalRewardsTest(unittest.TestCase):
     def test_excess_tilt_is_terminal_and_does_not_pay_locomotion(self):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
         env.prev_potential = 0.0
-        env.quadruped.position[2] = -0.5
+        env.quadruped.position[2] = 0.5
         env.quadruped.orientation = env.quadruped._euler_to_quaternion(
             np.array([0.0, 0.0, CRITICAL_TILT_ANGLE + 0.05])
         )
@@ -93,7 +93,7 @@ class TerminalRewardsTest(unittest.TestCase):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
         _set_ground_contact(env)
         env.prev_potential = 0.0
-        env.quadruped.position[2] = -0.02
+        env.quadruped.position[2] = 0.02
         env.quadruped.orientation = env.quadruped._euler_to_quaternion(
             np.array([0.0, 0.0, np.deg2rad(10.0) + 0.05])
         )
@@ -111,7 +111,7 @@ class TerminalRewardsTest(unittest.TestCase):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
         _set_two_foot_contacts(env)
         env.prev_potential = 0.0
-        env.quadruped.position[2] = -0.02
+        env.quadruped.position[2] = 0.02
         target_tilt = CRITICAL_TILT_ANGLE - 0.5 * TILT_SOFT_REWARD_MARGIN
         env.quadruped.orientation = env.quadruped._euler_to_quaternion(
             np.array([0.0, 0.0, target_tilt])
@@ -130,7 +130,7 @@ class TerminalRewardsTest(unittest.TestCase):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
         env.cumulative_locomotion_reward = 12.0
         env.prev_potential = 0.0
-        env.quadruped.position[2] = -0.5
+        env.quadruped.position[2] = 0.5
         env.quadruped.orientation = env.quadruped._euler_to_quaternion(
             np.array([0.0, 0.0, CRITICAL_TILT_ANGLE + 0.05])
         )
@@ -145,7 +145,7 @@ class TerminalRewardsTest(unittest.TestCase):
     def test_joint_limit_timeout_is_terminal_and_does_not_pay_locomotion(self):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
         env.prev_potential = 0.0
-        env.quadruped.position[2] = -0.5
+        env.quadruped.position[2] = 0.5
         env.quadruped.shoulder_angles[0] = SHOULDER_ANGLE_MAX
         env.consecutive_shoulder_limit_steps[0] = MAX_CONSECUTIVE_JOINT_LIMIT_STEPS
 
@@ -161,8 +161,8 @@ class TerminalRewardsTest(unittest.TestCase):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
         _set_two_foot_contacts(env)
         env.prev_potential = 0.0
-        env.quadruped.position[2] = -0.02
-        env.quadruped.velocity[2] = -0.5
+        env.quadruped.position[2] = 0.02
+        env.quadruped.velocity[2] = 0.5
 
         with _freeze_physics():
             _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
@@ -182,7 +182,7 @@ class TerminalRewardsTest(unittest.TestCase):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
         _set_two_foot_contacts(env)
         env.prev_potential = 0.0
-        env.quadruped.position[2] = -0.02
+        env.quadruped.position[2] = 0.02
         env.quadruped.position[1] = MIN_BODY_HEIGHT + 0.5 * HEIGHT_SOFT_REWARD_MARGIN
 
         with _freeze_physics():
@@ -196,8 +196,8 @@ class TerminalRewardsTest(unittest.TestCase):
     def test_forward_progress_without_recent_contact_does_not_pay(self):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
         env.prev_potential = 0.0
-        env.quadruped.position[2] = -0.02
-        env.quadruped.velocity[2] = -0.5
+        env.quadruped.position[2] = 0.02
+        env.quadruped.velocity[2] = 0.5
 
         with _freeze_physics():
             _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
@@ -246,7 +246,7 @@ class TerminalRewardsTest(unittest.TestCase):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
         _set_ground_contact(env)
         env.prev_potential = 0.0
-        env.quadruped.position[2] = -0.02
+        env.quadruped.position[2] = 0.02
 
         with _freeze_physics():
             _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
@@ -329,7 +329,7 @@ class TerminalRewardsTest(unittest.TestCase):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
         env.prev_potential = 0.0
         env.quadruped.position[2] = 0.0
-        env.quadruped.velocity[2] = -1.0
+        env.quadruped.velocity[2] = 1.0
 
         with _freeze_physics():
             _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])
@@ -343,8 +343,8 @@ class TerminalRewardsTest(unittest.TestCase):
         env = QuadrupedEnv(rendering=False, headless=True, bench_mode=False)
         _set_ground_contact(env)
         env.prev_potential = 0.0
-        env.quadruped.position[2] = 0.8
-        env.quadruped.velocity[2] = 1.0
+        env.quadruped.position[2] = -0.8
+        env.quadruped.velocity[2] = -1.0
 
         with _freeze_physics():
             _, reward, done, _ = env.step([0, 0, 0, 0], [0, 0, 0, 0])

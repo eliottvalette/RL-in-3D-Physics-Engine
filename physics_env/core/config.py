@@ -23,6 +23,8 @@ GRAY = (128, 128, 128)
 # 4.0 unites de longueur pour le body correspondent a 0.80 m.
 # Donc 1 unite moteur = 0.20 m dans le monde physique.
 UNIT_SCALE_M = 0.20
+TASK_FORWARD_Z_SIGN = 1.0  # +Z is the red/front side in the box renderer.
+TASK_FORWARD_WORLD = np.array([0.0, 0.0, TASK_FORWARD_Z_SIGN], dtype=np.float64)
 
 GRAVITY = np.array([0, -9.81, 0])
 DT = 1 / PHYSICS_HZ
@@ -48,8 +50,8 @@ SHOULDER_DELTA = 0.025
 ELBOW_DELTA = 0.025
 SHOULDER_ANGLE_MIN = -np.pi / 2
 SHOULDER_ANGLE_MAX = np.pi / 2
-ELBOW_ANGLE_MIN = 0
-ELBOW_ANGLE_MAX = np.pi
+ELBOW_ANGLE_MIN = -np.pi
+ELBOW_ANGLE_MAX = 0
 
 # Limites "near joint limit" pretes pour des bornes distinctes et asymetriques.
 SHOULDER_JOINT_LIMIT_THRESHOLD_LOW = SHOULDER_ANGLE_MIN * 0.9
