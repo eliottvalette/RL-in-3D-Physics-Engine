@@ -15,6 +15,7 @@ from physics_env.core.config import (
     DEBUG_GAIT_EVAL_EPISODES,
     DEBUG_GAIT_EVAL_JSON_PATH,
     DEBUG_GAIT_EVAL_MAX_STEPS,
+    DEBUG_GAIT_EVAL_PRINT_EPISODES,
     DEBUG_GAIT_EVAL_SAVE_JSON,
     DT,
     PHYSICS_HZ,
@@ -25,6 +26,8 @@ from physics_env.envs.quadruped_env import QuadrupedEnv
 
 
 LEG_NAMES = ("front_right", "front_left", "back_right", "back_left")
+FRONT_LEGS = (0, 1)
+REAR_LEGS = (2, 3)
 DIAGONAL_A = (0, 3)
 DIAGONAL_B = (1, 2)
 REWARD_COMPONENT_KEYS = (
@@ -95,6 +98,32 @@ def _contact_switches_per_second(contacts: np.ndarray, duration_s: float) -> dic
         leg_name: float(switches[leg_idx] / duration_s)
         for leg_idx, leg_name in enumerate(LEG_NAMES)
     }
+
+
+def _dict_mean(dicts: list[dict[str, float]], keys: tuple[str, ...]) -> dict[str, float]:
+    if not dicts:
+        return {key: 0.0 for key in keys}
+    return {
+        key: float(np.mean([values.get(key, 0.0) for values in dicts]))
+        for key in keys
+    }
+
+
+def _dict_sum(dicts: list[dict[str, float]], keys: tuple[str, ...]) -> dict[str, float]:
+    if not dicts:
+        return {key: 0.0 for key in keys}
+    return {
+        key: float(np.sum([values.get(key, 0.0) for values in dicts]))
+        for key in keys
+    }
+
+
+def _positive_share(values: np.ndarray, mask: np.ndarray) -> float:
+    positives = np.maximum(values, 0.0)
+    total = float(np.sum(positives))
+    if total <= 1e-9:
+        return 0.0
+    return float(np.sum(positives[mask]) / total)
 
 
 def _run_durations_s(mask: np.ndarray, target_value: bool) -> list[float]:
@@ -220,6 +249,8 @@ def _summarize_episode(samples: list[dict[str, Any]]) -> dict[str, Any]:
     max_abs_tilt = np.asarray([sample["max_abs_tilt_deg"] for sample in samples], dtype=np.float64)
     angular_velocity = np.asarray([sample["angular_velocity_norm"] for sample in samples], dtype=np.float64)
     actions = np.asarray([sample["action"] for sample in samples], dtype=np.float64)
+    shoulder_actions = actions[:, :4] if actions.size else np.empty((0, 4), dtype=np.float64)
+    elbow_actions = actions[:, 4:] if actions.size else np.empty((0, 4), dtype=np.float64)
     contacts = np.asarray([sample["foot_contact"] for sample in samples], dtype=np.float64)
     grounded_leg_count = np.asarray([sample["grounded_leg_count"] for sample in samples], dtype=np.float64)
     foot_heights = np.asarray([sample["foot_heights_world_units"] for sample in samples], dtype=np.float64)
@@ -243,6 +274,59 @@ def _summarize_episode(samples: list[dict[str, Any]]) -> dict[str, Any]:
     diagonal_state = np.where(diagonal_a_only, 1, np.where(diagonal_b_only, -1, 0))
     diagonal_nonzero = diagonal_state[diagonal_state != 0]
     diagonal_switches = _count_sign_changes(diagonal_nonzero.astype(np.float64))
+    front_pair = np.logical_and(contacts[:, FRONT_LEGS[0]] > 0.5, contacts[:, FRONT_LEGS[1]] > 0.5)
+    rear_pair = np.logical_and(contacts[:, REAR_LEGS[0]] > 0.5, contacts[:, REAR_LEGS[1]] > 0.5)
+    front_any = np.any(contacts[:, FRONT_LEGS] > 0.5, axis=1)
+    rear_any = np.any(contacts[:, REAR_LEGS] > 0.5, axis=1)
+    rear_pair_without_front = np.logical_and(rear_pair, np.logical_not(front_any))
+    front_pair_without_rear = np.logical_and(front_pair, np.logical_not(rear_any))
+    diagonal_any = np.logical_or(diagonal_a, diagonal_b)
+    diagonal_only = np.logical_or(diagonal_a_only, diagonal_b_only)
+    forward_accel = np.diff(forward_speed, prepend=forward_speed[0]) / max(DT, 1e-9)
+    positive_forward_accel = forward_accel > 0.0
+    positive_forward_progress_total = float(np.sum(np.maximum(forward_deltas, 0.0)))
+    positive_forward_accel_total = float(np.sum(np.maximum(forward_accel, 0.0)))
+    per_leg_positive_accel_share = {
+        leg_name: _positive_share(forward_accel, contacts[:, leg_idx] > 0.5)
+        for leg_idx, leg_name in enumerate(LEG_NAMES)
+    }
+    per_leg_positive_progress_share = {
+        leg_name: _positive_share(forward_deltas, contacts[:, leg_idx] > 0.5)
+        for leg_idx, leg_name in enumerate(LEG_NAMES)
+    }
+    per_leg_when_positive_accel_fraction = {
+        leg_name: float(np.mean(contacts[positive_forward_accel, leg_idx] > 0.5))
+        if np.any(positive_forward_accel) else 0.0
+        for leg_idx, leg_name in enumerate(LEG_NAMES)
+    }
+    per_leg_action_abs_mean = {
+        leg_name: float(np.mean((np.abs(shoulder_actions[:, leg_idx]) + np.abs(elbow_actions[:, leg_idx])) * 0.5))
+        if shoulder_actions.size and elbow_actions.size else 0.0
+        for leg_idx, leg_name in enumerate(LEG_NAMES)
+    }
+    per_leg_shoulder_action_abs_mean = {
+        leg_name: float(np.mean(np.abs(shoulder_actions[:, leg_idx]))) if shoulder_actions.size else 0.0
+        for leg_idx, leg_name in enumerate(LEG_NAMES)
+    }
+    per_leg_elbow_action_abs_mean = {
+        leg_name: float(np.mean(np.abs(elbow_actions[:, leg_idx]))) if elbow_actions.size else 0.0
+        for leg_idx, leg_name in enumerate(LEG_NAMES)
+    }
+    per_leg_action_switches_s = {}
+    if actions.shape[0] >= 2 and duration_s > 0.0:
+        for leg_idx, leg_name in enumerate(LEG_NAMES):
+            leg_switches = np.count_nonzero(shoulder_actions[1:, leg_idx] != shoulder_actions[:-1, leg_idx])
+            leg_switches += np.count_nonzero(elbow_actions[1:, leg_idx] != elbow_actions[:-1, leg_idx])
+            per_leg_action_switches_s[leg_name] = float(leg_switches / (2.0 * duration_s))
+    else:
+        per_leg_action_switches_s = {leg_name: 0.0 for leg_name in LEG_NAMES}
+    front_action_abs = float(np.sum([per_leg_action_abs_mean[LEG_NAMES[idx]] for idx in FRONT_LEGS]))
+    rear_action_abs = float(np.sum([per_leg_action_abs_mean[LEG_NAMES[idx]] for idx in REAR_LEGS]))
+    rear_action_abs_share = rear_action_abs / max(front_action_abs + rear_action_abs, 1e-9)
+    front_positive_accel_share = float(sum(per_leg_positive_accel_share[LEG_NAMES[idx]] for idx in FRONT_LEGS))
+    rear_positive_accel_share = float(sum(per_leg_positive_accel_share[LEG_NAMES[idx]] for idx in REAR_LEGS))
+    front_positive_progress_share = float(sum(per_leg_positive_progress_share[LEG_NAMES[idx]] for idx in FRONT_LEGS))
+    rear_positive_progress_share = float(sum(per_leg_positive_progress_share[LEG_NAMES[idx]] for idx in REAR_LEGS))
     reward_breakdown = _reward_breakdown(samples)
 
     return {
@@ -289,6 +373,18 @@ def _summarize_episode(samples: list[dict[str, Any]]) -> dict[str, Any]:
             leg_name: float(np.mean(contacts[:, leg_idx] > 0.5))
             for leg_idx, leg_name in enumerate(LEG_NAMES)
         },
+        "per_leg_positive_accel_share": per_leg_positive_accel_share,
+        "per_leg_positive_progress_share": per_leg_positive_progress_share,
+        "per_leg_when_positive_accel_fraction": per_leg_when_positive_accel_fraction,
+        "per_leg_action_abs_mean": per_leg_action_abs_mean,
+        "per_leg_shoulder_action_abs_mean": per_leg_shoulder_action_abs_mean,
+        "per_leg_elbow_action_abs_mean": per_leg_elbow_action_abs_mean,
+        "per_leg_action_switches_s": per_leg_action_switches_s,
+        "rear_action_abs_share": rear_action_abs_share,
+        "front_positive_accel_share": front_positive_accel_share,
+        "rear_positive_accel_share": rear_positive_accel_share,
+        "front_positive_progress_share": front_positive_progress_share,
+        "rear_positive_progress_share": rear_positive_progress_share,
         "stance_duration_mean_s": {
             leg_name: _mean(np.asarray(_run_durations_s(contacts[:, leg_idx] > 0.5, True), dtype=np.float64))
             for leg_idx, leg_name in enumerate(LEG_NAMES)
@@ -304,7 +400,29 @@ def _summarize_episode(samples: list[dict[str, Any]]) -> dict[str, Any]:
         },
         "diagonal_a_front_right_back_left_fraction": float(np.mean(diagonal_a_only)),
         "diagonal_b_front_left_back_right_fraction": float(np.mean(diagonal_b_only)),
+        "diagonal_contact_fraction": float(np.mean(diagonal_any)),
+        "diagonal_only_fraction": float(np.mean(diagonal_only)),
         "diagonal_switches_per_s": float(diagonal_switches / max(duration_s, 1e-9)),
+        "front_pair_contact_fraction": float(np.mean(front_pair)),
+        "rear_pair_contact_fraction": float(np.mean(rear_pair)),
+        "front_pair_without_rear_fraction": float(np.mean(front_pair_without_rear)),
+        "rear_pair_without_front_fraction": float(np.mean(rear_pair_without_front)),
+        "rear_pair_vs_diagonal_contact_ratio": float(np.mean(rear_pair) / max(float(np.mean(diagonal_any)), 1e-9)),
+        "positive_forward_accel_fraction": float(np.mean(positive_forward_accel)),
+        "rear_pair_when_positive_accel_fraction": float(np.mean(rear_pair[positive_forward_accel]))
+        if np.any(positive_forward_accel) else 0.0,
+        "diagonal_when_positive_accel_fraction": float(np.mean(diagonal_any[positive_forward_accel]))
+        if np.any(positive_forward_accel) else 0.0,
+        "rear_pair_positive_accel_share": _positive_share(forward_accel, rear_pair),
+        "rear_pair_without_front_positive_accel_share": _positive_share(forward_accel, rear_pair_without_front),
+        "front_pair_positive_accel_share": _positive_share(forward_accel, front_pair),
+        "diagonal_positive_accel_share": _positive_share(forward_accel, diagonal_any),
+        "rear_pair_positive_progress_share": _positive_share(forward_deltas, rear_pair),
+        "rear_pair_without_front_positive_progress_share": _positive_share(forward_deltas, rear_pair_without_front),
+        "front_pair_positive_progress_share": _positive_share(forward_deltas, front_pair),
+        "diagonal_positive_progress_share": _positive_share(forward_deltas, diagonal_any),
+        "positive_forward_progress_units": positive_forward_progress_total,
+        "positive_forward_accel_units_s2_sum": positive_forward_accel_total,
         "foot_height_min_units": {
             leg_name: float(np.min(foot_heights[:, leg_idx]))
             for leg_idx, leg_name in enumerate(LEG_NAMES)
@@ -351,7 +469,30 @@ def _summarize_global(episode_summaries: list[dict[str, Any]]) -> dict[str, Any]
         "joint_limit_push_steps_max",
         "grounded_leg_count_mean",
         "com_minus_support_centroid_norm_p95_units",
+        "diagonal_contact_fraction",
+        "diagonal_only_fraction",
         "diagonal_switches_per_s",
+        "front_pair_contact_fraction",
+        "rear_pair_contact_fraction",
+        "front_pair_without_rear_fraction",
+        "rear_pair_without_front_fraction",
+        "rear_pair_vs_diagonal_contact_ratio",
+        "positive_forward_accel_fraction",
+        "rear_pair_when_positive_accel_fraction",
+        "diagonal_when_positive_accel_fraction",
+        "rear_pair_positive_accel_share",
+        "rear_pair_without_front_positive_accel_share",
+        "front_pair_positive_accel_share",
+        "diagonal_positive_accel_share",
+        "rear_pair_positive_progress_share",
+        "rear_pair_without_front_positive_progress_share",
+        "front_pair_positive_progress_share",
+        "diagonal_positive_progress_share",
+        "rear_action_abs_share",
+        "front_positive_accel_share",
+        "rear_positive_accel_share",
+        "front_positive_progress_share",
+        "rear_positive_progress_share",
         "contact_foot_planar_speed_p95_units_s",
     ]
     summary: dict[str, Any] = {
@@ -371,6 +512,55 @@ def _summarize_global(episode_summaries: list[dict[str, Any]]) -> dict[str, Any]
         key: float(np.sum([item["reward_component_sum"].get(key, 0.0) for item in episode_summaries]))
         for key in REWARD_COMPONENT_KEYS
     }
+    summary["duty_factor_mean"] = _dict_mean(
+        [item["duty_factor"] for item in episode_summaries],
+        LEG_NAMES,
+    )
+    summary["per_leg_positive_accel_share_mean"] = _dict_mean(
+        [item["per_leg_positive_accel_share"] for item in episode_summaries],
+        LEG_NAMES,
+    )
+    summary["per_leg_positive_progress_share_mean"] = _dict_mean(
+        [item["per_leg_positive_progress_share"] for item in episode_summaries],
+        LEG_NAMES,
+    )
+    summary["per_leg_when_positive_accel_fraction_mean"] = _dict_mean(
+        [item["per_leg_when_positive_accel_fraction"] for item in episode_summaries],
+        LEG_NAMES,
+    )
+    summary["per_leg_action_abs_mean"] = _dict_mean(
+        [item["per_leg_action_abs_mean"] for item in episode_summaries],
+        LEG_NAMES,
+    )
+    summary["per_leg_shoulder_action_abs_mean"] = _dict_mean(
+        [item["per_leg_shoulder_action_abs_mean"] for item in episode_summaries],
+        LEG_NAMES,
+    )
+    summary["per_leg_elbow_action_abs_mean"] = _dict_mean(
+        [item["per_leg_elbow_action_abs_mean"] for item in episode_summaries],
+        LEG_NAMES,
+    )
+    summary["per_leg_action_switches_s_mean"] = _dict_mean(
+        [item["per_leg_action_switches_s"] for item in episode_summaries],
+        LEG_NAMES,
+    )
+    support_pattern_sum = _dict_sum(
+        [item["support_pattern_fraction"] for item in episode_summaries],
+        tuple(
+            sorted(
+                {
+                    pattern
+                    for item in episode_summaries
+                    for pattern in item["support_pattern_fraction"]
+                }
+            )
+        ),
+    )
+    summary["support_pattern_fraction_mean"] = {
+        key: value / max(len(episode_summaries), 1)
+        for key, value in sorted(support_pattern_sum.items(), key=lambda item: item[1], reverse=True)
+    }
+    summary["top_support_patterns"] = dict(list(summary["support_pattern_fraction_mean"].items())[:8])
     total_steps = float(np.sum([item["steps"] for item in episode_summaries]))
     reward_reconstructed_sum = float(sum(reward_component_sum.values()))
     reward_sum = float(np.sum([item["reward_sum"] for item in episode_summaries]))
@@ -470,7 +660,6 @@ def print_gait_eval_report(result: GaitEvalResult, json_path: str | None) -> Non
     for key in (
         "reward_sum",
         "net_forward_progress_m",
-        "absolute_forward_motion_units",
         "net_to_absolute_forward_motion_ratio",
         "forward_speed_sign_changes_per_s",
         "body_height_std_units",
@@ -478,10 +667,8 @@ def print_gait_eval_report(result: GaitEvalResult, json_path: str | None) -> Non
         "angular_velocity_p95",
         "action_switches_per_joint_s",
         "grounded_leg_count_mean",
-        "com_minus_support_centroid_norm_p95_units",
         "diagonal_switches_per_s",
         "contact_foot_planar_speed_p95_units_s",
-        "joint_limit_penalty_sum",
     ):
         print(
             "[GAIT DEBUG]",
@@ -490,6 +677,81 @@ def print_gait_eval_report(result: GaitEvalResult, json_path: str | None) -> Non
             f"min={global_summary.get(f'{key}_min', 0.0):.4f}",
             f"max={global_summary.get(f'{key}_max', 0.0):.4f}",
         )
+
+    print("\n[GAIT DEBUG] Contact And Propulsion Proxy")
+    print("[GAIT DEBUG] top_support:", _format_dict(global_summary.get("top_support_patterns", {}), precision=4))
+    print(
+        "[GAIT DEBUG] contact_pattern_mean:",
+        _format_dict(
+            {
+                "diagonal": global_summary.get("diagonal_contact_fraction_mean", 0.0),
+                "diagonal_only": global_summary.get("diagonal_only_fraction_mean", 0.0),
+                "front_pair": global_summary.get("front_pair_contact_fraction_mean", 0.0),
+                "rear_pair": global_summary.get("rear_pair_contact_fraction_mean", 0.0),
+                "rear_pair_no_front": global_summary.get("rear_pair_without_front_fraction_mean", 0.0),
+                "rear_pair_vs_diag": global_summary.get("rear_pair_vs_diagonal_contact_ratio_mean", 0.0),
+            },
+            precision=4,
+        ),
+    )
+    print(
+        "[GAIT DEBUG] positive_accel_share:",
+        _format_dict(
+            {
+                "front_any_sum": global_summary.get("front_positive_accel_share_mean", 0.0),
+                "rear_any_sum": global_summary.get("rear_positive_accel_share_mean", 0.0),
+                "diagonal": global_summary.get("diagonal_positive_accel_share_mean", 0.0),
+                "rear_pair": global_summary.get("rear_pair_positive_accel_share_mean", 0.0),
+                "rear_pair_no_front": global_summary.get("rear_pair_without_front_positive_accel_share_mean", 0.0),
+            },
+            precision=4,
+        ),
+    )
+    print(
+        "[GAIT DEBUG] positive_progress_share:",
+        _format_dict(
+            {
+                "front_any_sum": global_summary.get("front_positive_progress_share_mean", 0.0),
+                "rear_any_sum": global_summary.get("rear_positive_progress_share_mean", 0.0),
+                "diagonal": global_summary.get("diagonal_positive_progress_share_mean", 0.0),
+                "rear_pair": global_summary.get("rear_pair_positive_progress_share_mean", 0.0),
+                "rear_pair_no_front": global_summary.get("rear_pair_without_front_positive_progress_share_mean", 0.0),
+            },
+            precision=4,
+        ),
+    )
+
+    print("\n[GAIT DEBUG] Per Leg Summary")
+    print("[GAIT DEBUG] duty:", _format_dict(global_summary.get("duty_factor_mean", {}), precision=4))
+    print(
+        "[GAIT DEBUG] positive_accel_share_by_leg:",
+        _format_dict(global_summary.get("per_leg_positive_accel_share_mean", {}), precision=4),
+    )
+    print(
+        "[GAIT DEBUG] positive_progress_share_by_leg:",
+        _format_dict(global_summary.get("per_leg_positive_progress_share_mean", {}), precision=4),
+    )
+    print(
+        "[GAIT DEBUG] contact_when_positive_accel:",
+        _format_dict(global_summary.get("per_leg_when_positive_accel_fraction_mean", {}), precision=4),
+    )
+    print("[GAIT DEBUG] action_abs:", _format_dict(global_summary.get("per_leg_action_abs_mean", {}), precision=4))
+    print(
+        "[GAIT DEBUG] shoulder_action_abs:",
+        _format_dict(global_summary.get("per_leg_shoulder_action_abs_mean", {}), precision=4),
+    )
+    print(
+        "[GAIT DEBUG] elbow_action_abs:",
+        _format_dict(global_summary.get("per_leg_elbow_action_abs_mean", {}), precision=4),
+    )
+    print(
+        "[GAIT DEBUG] action_switches_s:",
+        _format_dict(global_summary.get("per_leg_action_switches_s_mean", {}), precision=4),
+    )
+    print(
+        "[GAIT DEBUG]",
+        f"rear_action_abs_share_mean={global_summary.get('rear_action_abs_share_mean', 0.0):.4f}",
+    )
 
     print("\n[GAIT DEBUG] Reward Breakdown")
     print(
@@ -512,38 +774,37 @@ def print_gait_eval_report(result: GaitEvalResult, json_path: str | None) -> Non
             f"signed_share={reward_component_signed_share.get(key, 0.0) * 100.0:.1f}%",
         )
 
-    print("\n[GAIT DEBUG] Episodes")
-    for episode in result.episodes:
-        print(
-            "[GAIT DEBUG]",
-            f"ep={episode['episode']}",
-            f"steps={episode['steps']}",
-            f"duration_s={episode['duration_s']:.3f}",
-            f"done={episode['done_reason']}",
-            f"reward={episode['reward_sum']:.3f}",
-            f"reward_step={episode['reward_per_step']:.4f}",
-            f"net_m={episode['net_forward_progress_m']:.3f}",
-            f"net_abs_ratio={episode['net_to_absolute_forward_motion_ratio']:.3f}",
-            f"speed_sign_changes_s={episode['forward_speed_sign_changes_per_s']:.3f}",
-            f"height_std={episode['body_height_std_units']:.3f}",
-            f"tilt_p95={episode['max_abs_tilt_p95_deg']:.2f}",
-            f"action_switch_s={episode['action_switches_per_joint_s']:.3f}",
-        )
-        print("[GAIT DEBUG]   duty:", _format_dict(episode["duty_factor"]))
-        print("[GAIT DEBUG]   stance_s:", _format_dict(episode["stance_duration_mean_s"]))
-        print("[GAIT DEBUG]   swing_s:", _format_dict(episode["swing_duration_mean_s"]))
-        print("[GAIT DEBUG]   swing_clearance_p95_units:", _format_dict(episode["swing_foot_height_p95_units"]))
-        print("[GAIT DEBUG]   support:", _format_dict(episode["support_pattern_fraction"]))
-        ordered_episode_components = {
-            key: episode["reward_component_sum"].get(key, 0.0)
-            for key in _sorted_reward_keys(episode["reward_component_sum"])
-        }
-        ordered_episode_share = {
-            key: episode["reward_component_abs_share"].get(key, 0.0)
-            for key in ordered_episode_components
-        }
-        print("[GAIT DEBUG]   reward_components_sum:", _format_dict(ordered_episode_components, precision=4))
-        print("[GAIT DEBUG]   reward_abs_responsibility:", _format_percent_dict(ordered_episode_share))
+    if DEBUG_GAIT_EVAL_PRINT_EPISODES:
+        print("\n[GAIT DEBUG] Episodes")
+        for episode in result.episodes:
+            print(
+                "[GAIT DEBUG]",
+                f"ep={episode['episode']}",
+                f"steps={episode['steps']}",
+                f"done={episode['done_reason']}",
+                f"reward={episode['reward_sum']:.3f}",
+                f"net_m={episode['net_forward_progress_m']:.3f}",
+                f"net_abs_ratio={episode['net_to_absolute_forward_motion_ratio']:.3f}",
+                f"tilt_p95={episode['max_abs_tilt_p95_deg']:.2f}",
+                f"rear_action_share={episode['rear_action_abs_share']:.3f}",
+            )
+            print("[GAIT DEBUG]   duty:", _format_dict(episode["duty_factor"], precision=4))
+            print(
+                "[GAIT DEBUG]   propulsion:",
+                _format_dict(
+                    {
+                        "diag_contact": episode["diagonal_contact_fraction"],
+                        "rear_pair": episode["rear_pair_contact_fraction"],
+                        "rear_pos_accel_sum": episode["rear_positive_accel_share"],
+                        "front_pos_accel_sum": episode["front_positive_accel_share"],
+                        "rear_pos_progress_sum": episode["rear_positive_progress_share"],
+                        "front_pos_progress_sum": episode["front_positive_progress_share"],
+                    },
+                    precision=4,
+                ),
+            )
+    else:
+        print("\n[GAIT DEBUG] Episodes: hidden; set DEBUG_GAIT_EVAL_PRINT_EPISODES=True for per-episode terminal details.")
 
     print("\n[GAIT DEBUG] Reading Guide")
     print("[GAIT DEBUG] net_to_absolute_forward_motion_ratio close to 1 means little back-and-forth drift.")
@@ -551,6 +812,7 @@ def print_gait_eval_report(result: GaitEvalResult, json_path: str | None) -> Non
     print("[GAIT DEBUG] contact_foot_planar_speed is a foot-drag proxy measured while the foot is in contact.")
     print("[GAIT DEBUG] action_switches_per_joint_s measures command dithering rate normalized by simulated seconds.")
     print("[GAIT DEBUG] reward_abs_responsibility uses absolute component magnitudes, so it shows domination even when signs cancel.")
+    print("[GAIT DEBUG] propulsion_proxy uses body forward acceleration/progress crossed with contact patterns; it is not a contact-force measurement.")
 
 
 def save_gait_eval_json(result: GaitEvalResult, output_path: str) -> str:

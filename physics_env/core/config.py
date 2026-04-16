@@ -116,9 +116,10 @@ DEBUG_GAIT_EVAL_EPISODES = 10
 DEBUG_GAIT_EVAL_MAX_STEPS = 750
 DEBUG_GAIT_EVAL_SAVE_JSON = True
 DEBUG_GAIT_EVAL_JSON_PATH = "visualizations/debug_gait_eval.json"
+DEBUG_GAIT_EVAL_PRINT_EPISODES = False
 
 # ----- RL Training Config --------------------------------------
-EPISODES  = 10_000
+EPISODES  = 2_000
 MAX_STEPS = 750
 ROLLOUT_STEPS = 256
 GAE_LAMBDA = 0.998
