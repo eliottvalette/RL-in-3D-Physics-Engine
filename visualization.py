@@ -518,13 +518,11 @@ class Visualizer:
         self._plot_grouped_series(
             axes[3],
             metrics_data,
-            "Evaluation",
-            "Value",
+            "PPO KL",
+            "KL",
             [
-                ("eval_episode_reward", "Eval Reward", self.palette["cyan"]),
-                ("eval_forward_progress", "Eval Progress", self.palette["orange"]),
-                ("eval_mean_locomotion_scale", "Eval Pose Scale", self.palette["green"]),
-                ("eval_clean_episode", "Eval Clean", self.palette["yellow"]),
+                ("approx_kl", "Approx KL", self.palette["cyan"]),
+                ("final_approx_kl", "Final Approx KL", self.palette["orange"]),
             ],
         )
 

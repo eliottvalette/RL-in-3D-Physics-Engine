@@ -37,6 +37,10 @@ REWARD_COMPONENT_KEYS = (
     "joint_limit_penalty",
     "foot_slip_penalty",
     "action_change_penalty",
+    "forward_speed_reward",
+    "diagonal_gait_reward",
+    "swing_clearance_reward",
+    "non_diagonal_support_penalty",
     "support_degeneracy_penalty",
     "foot_unused_penalty",
     "terminal_event_reward",
@@ -248,6 +252,18 @@ def _sample_step(
         "foot_slip_speed_max": _safe_float(reward_components.get("foot_slip_speed_max")),
         "action_change_penalty": applied_reward_components["action_change_penalty"],
         "action_delta_mean_abs": _safe_float(reward_components.get("action_delta_mean_abs")),
+        "action_sign_flip_rate": _safe_float(reward_components.get("action_sign_flip_rate")),
+        "forward_speed_reward": applied_reward_components["forward_speed_reward"],
+        "forward_progress_speed_m_s": _safe_float(reward_components.get("forward_progress_speed_m_s")),
+        "forward_speed_reward_scale": _safe_float(reward_components.get("forward_speed_reward_scale")),
+        "target_progress_scale": _safe_float(reward_components.get("target_progress_scale")),
+        "diagonal_gait_reward": applied_reward_components["diagonal_gait_reward"],
+        "diagonal_contact_score": _safe_float(reward_components.get("diagonal_contact_score")),
+        "swing_clearance_reward": applied_reward_components["swing_clearance_reward"],
+        "swing_clearance_score": _safe_float(reward_components.get("swing_clearance_score")),
+        "swing_leg_fraction": _safe_float(reward_components.get("swing_leg_fraction")),
+        "non_diagonal_support_penalty": applied_reward_components["non_diagonal_support_penalty"],
+        "non_diagonal_support_active": _safe_float(reward_components.get("non_diagonal_support_active")),
         "support_degeneracy_penalty": applied_reward_components["support_degeneracy_penalty"],
         "consecutive_degenerate_support_steps": _safe_float(
             reward_components.get("consecutive_degenerate_support_steps")
@@ -981,6 +997,7 @@ def print_gait_eval_report(result: GaitEvalResult, json_path: str | None) -> Non
     print("[GAIT DEBUG] contact_foot_planar_speed is a foot-drag proxy measured while the foot is in contact.")
     print("[GAIT DEBUG] action_switches_per_joint_s measures command dithering rate normalized by simulated seconds.")
     print("[GAIT DEBUG] reward_abs_responsibility uses absolute component magnitudes, so it shows domination even when signs cancel.")
+    print("[GAIT DEBUG] swing_clearance_reward pays useful swing height only when progress and diagonal support are present.")
     print("[GAIT DEBUG] propulsion_proxy uses body forward acceleration/progress crossed with contact patterns; it is not a contact-force measurement.")
     task_forward_label = "+world_z" if TASK_FORWARD_Z_SIGN > 0.0 else "-world_z"
     print(f"[GAIT DEBUG] contact_impulse is measured from solver impulses; positive_forward is along task forward ({task_forward_label}).")

@@ -63,7 +63,7 @@ class QuadrupedEnv:
             vertices=get_quadruped_vertices(),
             vertices_dict=self.quadruped_vertices_dict
         )
-        self.camera_speed = 0.1
+        self.camera_speed = CAMERA_TRANSLATION_SPEED_UNITS_PER_STEP
         self.rotation_speed = 0.02
         self.font = pygame.font.Font(None, 24)
 
@@ -387,6 +387,17 @@ class QuadrupedEnv:
                 "forward_speed": 0.0,
                 "terminal_event_reward": 0.0,
                 "raw_distance_reward": 0.0,
+                "forward_speed_reward": 0.0,
+                "forward_progress_speed_m_s": 0.0,
+                "forward_speed_reward_scale": 0.0,
+                "target_progress_scale": 0.0,
+                "diagonal_gait_reward": 0.0,
+                "diagonal_contact_score": 0.0,
+                "swing_clearance_reward": 0.0,
+                "swing_clearance_score": 0.0,
+                "swing_leg_fraction": 0.0,
+                "non_diagonal_support_penalty": 0.0,
+                "non_diagonal_support_active": 0.0,
                 "angular_velocity_penalty": 0.0,
                 "angular_velocity_norm": 0.0,
                 "contact_count": float(len(getattr(self.quadruped, "active_contact_indices", []))),
@@ -406,6 +417,7 @@ class QuadrupedEnv:
                 "foot_slip_speed_max": 0.0,
                 "action_change_penalty": 0.0,
                 "action_delta_mean_abs": 0.0,
+                "action_sign_flip_rate": 0.0,
                 "support_degeneracy_penalty": 0.0,
                 "consecutive_degenerate_support_steps": 0.0,
                 "grounded_leg_count": 0.0,
@@ -544,6 +556,7 @@ class QuadrupedEnv:
         )
 
         foot_velocities = self.quadruped.get_foot_center_velocities_local()
+        foot_heights_world = self.quadruped.get_foot_centers_world()[:, 1]
         foot_planar_speeds = np.linalg.norm(foot_velocities[:, [0, 2]], axis=1)
         contact_planar_speeds = foot_planar_speeds[foot_contact_mask]
         if contact_planar_speeds.size:
@@ -560,7 +573,9 @@ class QuadrupedEnv:
             foot_slip_speed_max = 0.0
 
         action_delta = current_action - self.prev_action
-        action_change_penalty = -ACTION_CHANGE_PENALTY_COEF * float(np.mean(np.abs(action_delta)))
+        action_sign_flip_mask = current_action * self.prev_action < 0.0
+        action_sign_flip_rate = float(np.mean(action_sign_flip_mask))
+        action_change_penalty = -ACTION_CHANGE_PENALTY_COEF * 2.0 * action_sign_flip_rate
         foot_unused_penalty = self._saturating_step_penalty(
             self.consecutive_unused_foot_steps,
             FOOT_UNUSED_GRACE_STEPS,
@@ -578,6 +593,62 @@ class QuadrupedEnv:
         )
         raw_pose_scale = min(tilt_reward_scale, height_reward_scale)
         locomotion_reward_scale = min(raw_pose_scale, contact_quality_scale)
+        reward_grounded_scale = locomotion_reward_scale if grounded_recently else 0.0
+        forward_progress_speed_m_s = max(0.0, progress_delta) / max(DT, 1e-9) * UNIT_SCALE_M
+        forward_speed_reward_scale = float(
+            np.clip(forward_progress_speed_m_s / max(FORWARD_SPEED_TARGET_M_S, 1e-9), 0.0, 1.0)
+        )
+        target_progress_scale = CONTACT_QUALITY_SCALE_FLOOR + (
+            1.0 - CONTACT_QUALITY_SCALE_FLOOR
+        ) * forward_speed_reward_scale
+        target_progress_scale = float(np.clip(target_progress_scale, 0.0, 1.0))
+
+        diagonal_a_contact = bool(foot_contact_mask[0] and foot_contact_mask[3])
+        diagonal_b_contact = bool(foot_contact_mask[1] and foot_contact_mask[2])
+        diagonal_contact = diagonal_a_contact or diagonal_b_contact
+        diagonal_only_contact = diagonal_contact and grounded_leg_count == 2
+        diagonal_contact_score = (
+            1.0
+            if diagonal_only_contact
+            else DIAGONAL_GAIT_EXTRA_CONTACT_SCALE
+            if diagonal_contact
+            else 0.0
+        )
+        non_diagonal_support_active = grounded_leg_count >= CONTACT_QUALITY_MIN_LEGS and not diagonal_contact
+        swing_mask = np.logical_not(foot_contact_mask)
+        swing_leg_fraction = float(np.mean(swing_mask))
+        if np.any(swing_mask):
+            swing_clearance_score = float(
+                np.mean(
+                    np.clip(
+                        foot_heights_world[swing_mask] / max(SWING_CLEARANCE_TARGET_UNITS, 1e-9),
+                        0.0,
+                        1.0,
+                    )
+                )
+            )
+        else:
+            swing_clearance_score = 0.0
+        forward_speed_reward = FORWARD_SPEED_REWARD_MAX * forward_speed_reward_scale * reward_grounded_scale
+        diagonal_gait_reward = (
+            DIAGONAL_GAIT_REWARD_MAX
+            * diagonal_contact_score
+            * forward_speed_reward_scale
+            * reward_grounded_scale
+        )
+        swing_clearance_reward = (
+            SWING_CLEARANCE_REWARD_MAX
+            * diagonal_contact_score
+            * swing_clearance_score
+            * forward_speed_reward_scale
+            * reward_grounded_scale
+        )
+        non_diagonal_support_penalty = (
+            -NON_DIAGONAL_SUPPORT_PENALTY_MAX
+            * float(non_diagonal_support_active)
+            * forward_speed_reward_scale
+            * reward_grounded_scale
+        )
 
         joint_limit_timeout = (
             int(self.consecutive_shoulder_limit_steps.max()) > MAX_CONSECUTIVE_JOINT_LIMIT_STEPS
@@ -613,7 +684,12 @@ class QuadrupedEnv:
         # ----------  d)  Somme finale -------------------------
         # Objectif: le progres ne compte que dans un regime de locomotion au sol.
         # Une petite penalite de vitesse angulaire limite les oscillations du body.
-        locomotion_reward = (distance_reward * locomotion_reward_scale) if not done else 0.0
+        if done:
+            locomotion_reward = 0.0
+        elif distance_reward > 0.0:
+            locomotion_reward = distance_reward * locomotion_reward_scale * target_progress_scale
+        else:
+            locomotion_reward = distance_reward * locomotion_reward_scale
         if done:
             reward = terminal_event_reward
         else:
@@ -623,6 +699,10 @@ class QuadrupedEnv:
                 + joint_limit_penalty
                 + foot_slip_penalty
                 + action_change_penalty
+                + forward_speed_reward
+                + diagonal_gait_reward
+                + swing_clearance_reward
+                + non_diagonal_support_penalty
                 + support_degeneracy_penalty
                 + foot_unused_penalty
             )
@@ -636,6 +716,17 @@ class QuadrupedEnv:
             "clipped_forward_progress": float(max(0.0, forward_progress)),
             "progress_delta": float(progress_delta),
             "forward_speed": float(forward_speed),
+            "forward_speed_reward": float(forward_speed_reward if not done else 0.0),
+            "forward_progress_speed_m_s": float(forward_progress_speed_m_s),
+            "forward_speed_reward_scale": float(forward_speed_reward_scale),
+            "target_progress_scale": float(target_progress_scale),
+            "diagonal_gait_reward": float(diagonal_gait_reward if not done else 0.0),
+            "diagonal_contact_score": float(diagonal_contact_score),
+            "swing_clearance_reward": float(swing_clearance_reward if not done else 0.0),
+            "swing_clearance_score": float(swing_clearance_score),
+            "swing_leg_fraction": float(swing_leg_fraction),
+            "non_diagonal_support_penalty": float(non_diagonal_support_penalty if not done else 0.0),
+            "non_diagonal_support_active": 1.0 if non_diagonal_support_active else 0.0,
             "terminal_event_reward": float(terminal_event_reward),
             "angular_velocity_penalty": float(angular_velocity_penalty),
             "angular_velocity_norm": float(angular_velocity_norm),
@@ -656,6 +747,7 @@ class QuadrupedEnv:
             "foot_slip_speed_max": float(foot_slip_speed_max),
             "action_change_penalty": float(action_change_penalty),
             "action_delta_mean_abs": float(np.mean(np.abs(action_delta))),
+            "action_sign_flip_rate": float(action_sign_flip_rate),
             "support_degeneracy_penalty": float(support_degeneracy_penalty),
             "consecutive_degenerate_support_steps": float(self.consecutive_degenerate_support_steps),
             "grounded_leg_count": float(grounded_leg_count),

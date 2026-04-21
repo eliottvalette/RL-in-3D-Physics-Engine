@@ -16,7 +16,7 @@ class _DummyAgent:
 
 
 class SaveModelsTest(unittest.TestCase):
-    def test_save_models_does_not_overwrite_existing_latest_model(self):
+    def test_save_models_overwrites_existing_latest_model(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             models_dir = Path(tmp_dir)
             latest_path = models_dir / "quadruped_agent.pth"
@@ -24,7 +24,7 @@ class SaveModelsTest(unittest.TestCase):
 
             save_models(_DummyAgent(), episode=1299, models_dir=str(models_dir))
 
-            self.assertEqual(latest_path.read_bytes(), b"existing model")
+            self.assertNotEqual(latest_path.read_bytes(), b"existing model")
             self.assertTrue((models_dir / "quadruped_agent_epoch_1299.pth").exists())
 
     def test_save_models_creates_latest_model_when_missing(self):
