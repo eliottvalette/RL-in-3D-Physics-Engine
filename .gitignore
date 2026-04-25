@@ -11,3 +11,4 @@ profiling/
 .DS_Store
 video_output/
 three_rendering/public
+*.claude

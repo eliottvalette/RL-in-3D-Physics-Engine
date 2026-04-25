@@ -62,11 +62,20 @@ def _action_edge_color(action_value):
 
 
 class Quadruped:
-    def __init__(self, position, vertices, vertices_dict, rotation = np.array([0.0, 0.0, 0.0]), velocity = np.array([0.0, 0.0, 0.0]), color = (255, 255, 255)):
+    def __init__(self, position, vertices, vertices_dict, rotation=None, velocity=None, color = (255, 255, 255)):
+        position = np.array(position, dtype=np.float64)
+        if rotation is None:
+            rotation = INITIAL_ROTATION.copy()
+        else:
+            rotation = np.array(rotation, dtype=np.float64)
+        if velocity is None:
+            velocity = INITIAL_LINEAR_VELOCITY.copy()
+        else:
+            velocity = np.array(velocity, dtype=np.float64)
         self.initial_position = position.copy()
         self.initial_velocity = velocity.copy()
         self.initial_rotation = rotation.copy()
-        self.initial_angular_velocity = np.array([0.0, 0.0, 0.0]).copy()
+        self.initial_angular_velocity = INITIAL_ANGULAR_VELOCITY.copy()
         self.initial_rotation = rotation.copy()
         self.initial_vertices = vertices.copy()
         self.initial_vertices_dict = vertices_dict.copy()
@@ -76,7 +85,7 @@ class Quadruped:
         self.velocity = velocity
         self.rotation = rotation # rotation en radians
         self.orientation = self._euler_to_quaternion(rotation)
-        self.angular_velocity = np.array([0.0, 0.0, 0.0])
+        self.angular_velocity = INITIAL_ANGULAR_VELOCITY.copy()
         self.vertices = vertices.copy()
         self.vertices_dict = vertices_dict.copy()
         

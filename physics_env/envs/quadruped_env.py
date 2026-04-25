@@ -59,7 +59,9 @@ class QuadrupedEnv:
         self.ground = Ground(size=20)
         self.quadruped_vertices_dict = create_quadruped_vertices()
         self.quadruped = Quadruped(
-            position=np.array([0.0, 4.5, 0.0]),
+            position=INITIAL_POSITION.copy(),
+            rotation=INITIAL_ROTATION.copy(),
+            velocity=INITIAL_LINEAR_VELOCITY.copy(),
             vertices=get_quadruped_vertices(),
             vertices_dict=self.quadruped_vertices_dict
         )
@@ -75,6 +77,7 @@ class QuadrupedEnv:
         self.consecutive_shoulder_limit_steps = np.zeros(4, dtype=np.int32)
         self.consecutive_elbow_limit_steps = np.zeros(4, dtype=np.int32)
         self.consecutive_degenerate_support_steps = 0
+        self.consecutive_non_diagonal_support_steps = 0
         self.consecutive_unused_foot_steps = np.zeros(4, dtype=np.int32)
         self.steps_since_contact = 0
         self.has_had_ground_contact = False
@@ -91,6 +94,7 @@ class QuadrupedEnv:
         self.consecutive_shoulder_limit_steps.fill(0)
         self.consecutive_elbow_limit_steps.fill(0)
         self.consecutive_degenerate_support_steps = 0
+        self.consecutive_non_diagonal_support_steps = 0
         self.consecutive_unused_foot_steps.fill(0)
 
     def _compute_body_tilt_angles(self):
@@ -398,6 +402,7 @@ class QuadrupedEnv:
                 "swing_leg_fraction": 0.0,
                 "non_diagonal_support_penalty": 0.0,
                 "non_diagonal_support_active": 0.0,
+                "consecutive_non_diagonal_support_steps": 0.0,
                 "angular_velocity_penalty": 0.0,
                 "angular_velocity_norm": 0.0,
                 "contact_count": float(len(getattr(self.quadruped, "active_contact_indices", []))),
@@ -415,6 +420,8 @@ class QuadrupedEnv:
                 "foot_slip_penalty": 0.0,
                 "foot_slip_speed_mean": 0.0,
                 "foot_slip_speed_max": 0.0,
+                "traction_slip_excess": 0.0,
+                "traction_reward_scale": 1.0,
                 "action_change_penalty": 0.0,
                 "action_delta_mean_abs": 0.0,
                 "action_sign_flip_rate": 0.0,
@@ -462,7 +469,10 @@ class QuadrupedEnv:
         forward_tilt, side_tilt = self._compute_body_tilt_angles()
         max_tilt = max(forward_tilt, side_tilt)
         angular_velocity_norm = float(np.linalg.norm(self.quadruped.angular_velocity))
-        angular_velocity_penalty = -ANGULAR_VELOCITY_PENALTY_COEF * angular_velocity_norm
+        angular_velocity_penalty = -ANGULAR_VELOCITY_PENALTY_COEF * max(
+            angular_velocity_norm - ANGULAR_VELOCITY_TOLERANCE,
+            0.0,
+        )
 
         contact_count = int(len(getattr(self.quadruped, "active_contact_indices", [])))
         if contact_count > 0:
@@ -560,22 +570,44 @@ class QuadrupedEnv:
         foot_planar_speeds = np.linalg.norm(foot_velocities[:, [0, 2]], axis=1)
         contact_planar_speeds = foot_planar_speeds[foot_contact_mask]
         if contact_planar_speeds.size:
-            slip_excess = np.maximum(contact_planar_speeds - FOOT_SLIP_SPEED_THRESHOLD, 0.0)
+            slip_excess = np.maximum(
+                contact_planar_speeds - FOOT_SLIP_SPEED_THRESHOLD - FOOT_SLIP_SPEED_TOLERANCE,
+                0.0,
+            )
             foot_slip_penalty = -min(
                 FOOT_SLIP_MAX_PENALTY,
                 FOOT_SLIP_PENALTY_COEF * float(np.mean(slip_excess)),
             )
             foot_slip_speed_mean = float(np.mean(contact_planar_speeds))
             foot_slip_speed_max = float(np.max(contact_planar_speeds))
+            traction_slip_excess = max(
+                foot_slip_speed_max - FOOT_SLIP_SPEED_THRESHOLD - FOOT_SLIP_SPEED_TOLERANCE,
+                0.0,
+            )
+            traction_reward_scale = CONTACT_QUALITY_SCALE_FLOOR + (
+                1.0 - CONTACT_QUALITY_SCALE_FLOOR
+            ) * (
+                1.0
+                - np.clip(
+                    traction_slip_excess / max(FOOT_SLIP_SPEED_THRESHOLD, 1e-9),
+                    0.0,
+                    1.0,
+                )
+            )
         else:
             foot_slip_penalty = 0.0
             foot_slip_speed_mean = 0.0
             foot_slip_speed_max = 0.0
+            traction_slip_excess = 0.0
+            traction_reward_scale = 1.0
 
         action_delta = current_action - self.prev_action
         action_sign_flip_mask = current_action * self.prev_action < 0.0
         action_sign_flip_rate = float(np.mean(action_sign_flip_mask))
-        action_change_penalty = -ACTION_CHANGE_PENALTY_COEF * 2.0 * action_sign_flip_rate
+        action_sign_flip_excess = max(action_sign_flip_rate - ACTION_SIGN_FLIP_RATE_TOLERANCE, 0.0)
+        action_change_penalty = -ACTION_CHANGE_PENALTY_COEF * 2.0 * (
+            action_sign_flip_excess / max(1.0 - ACTION_SIGN_FLIP_RATE_TOLERANCE, 1e-9)
+        )
         foot_unused_penalty = self._saturating_step_penalty(
             self.consecutive_unused_foot_steps,
             FOOT_UNUSED_GRACE_STEPS,
@@ -615,6 +647,10 @@ class QuadrupedEnv:
             else 0.0
         )
         non_diagonal_support_active = grounded_leg_count >= CONTACT_QUALITY_MIN_LEGS and not diagonal_contact
+        if non_diagonal_support_active:
+            self.consecutive_non_diagonal_support_steps += 1
+        else:
+            self.consecutive_non_diagonal_support_steps = 0
         swing_mask = np.logical_not(foot_contact_mask)
         swing_leg_fraction = float(np.mean(swing_mask))
         if np.any(swing_mask):
@@ -629,12 +665,18 @@ class QuadrupedEnv:
             )
         else:
             swing_clearance_score = 0.0
-        forward_speed_reward = FORWARD_SPEED_REWARD_MAX * forward_speed_reward_scale * reward_grounded_scale
+        forward_speed_reward = (
+            FORWARD_SPEED_REWARD_MAX
+            * forward_speed_reward_scale
+            * reward_grounded_scale
+            * traction_reward_scale
+        )
         diagonal_gait_reward = (
             DIAGONAL_GAIT_REWARD_MAX
             * diagonal_contact_score
             * forward_speed_reward_scale
             * reward_grounded_scale
+            * traction_reward_scale
         )
         swing_clearance_reward = (
             SWING_CLEARANCE_REWARD_MAX
@@ -642,10 +684,15 @@ class QuadrupedEnv:
             * swing_clearance_score
             * forward_speed_reward_scale
             * reward_grounded_scale
+            * traction_reward_scale
         )
         non_diagonal_support_penalty = (
-            -NON_DIAGONAL_SUPPORT_PENALTY_MAX
-            * float(non_diagonal_support_active)
+            self._saturating_step_penalty(
+                [self.consecutive_non_diagonal_support_steps],
+                NON_DIAGONAL_SUPPORT_GRACE_STEPS,
+                NON_DIAGONAL_SUPPORT_WINDOW_STEPS,
+                NON_DIAGONAL_SUPPORT_PENALTY_MAX,
+            )
             * forward_speed_reward_scale
             * reward_grounded_scale
         )
@@ -687,7 +734,12 @@ class QuadrupedEnv:
         if done:
             locomotion_reward = 0.0
         elif distance_reward > 0.0:
-            locomotion_reward = distance_reward * locomotion_reward_scale * target_progress_scale
+            locomotion_reward = (
+                distance_reward
+                * locomotion_reward_scale
+                * target_progress_scale
+                * traction_reward_scale
+            )
         else:
             locomotion_reward = distance_reward * locomotion_reward_scale
         if done:
@@ -727,6 +779,7 @@ class QuadrupedEnv:
             "swing_leg_fraction": float(swing_leg_fraction),
             "non_diagonal_support_penalty": float(non_diagonal_support_penalty if not done else 0.0),
             "non_diagonal_support_active": 1.0 if non_diagonal_support_active else 0.0,
+            "consecutive_non_diagonal_support_steps": float(self.consecutive_non_diagonal_support_steps),
             "terminal_event_reward": float(terminal_event_reward),
             "angular_velocity_penalty": float(angular_velocity_penalty),
             "angular_velocity_norm": float(angular_velocity_norm),
@@ -745,6 +798,8 @@ class QuadrupedEnv:
             "foot_slip_penalty": float(foot_slip_penalty),
             "foot_slip_speed_mean": float(foot_slip_speed_mean),
             "foot_slip_speed_max": float(foot_slip_speed_max),
+            "traction_slip_excess": float(traction_slip_excess),
+            "traction_reward_scale": float(traction_reward_scale),
             "action_change_penalty": float(action_change_penalty),
             "action_delta_mean_abs": float(np.mean(np.abs(action_delta))),
             "action_sign_flip_rate": float(action_sign_flip_rate),
