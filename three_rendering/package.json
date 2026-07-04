@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:gait": "tsx scripts/test_ik_trot.ts",
     "inspect-glb": "tsx scripts/inspect_glb.ts public/models/rigged_robot_walk.glb",
     "extract-rig-map": "tsx scripts/extract_rig_map.ts public/models/rigged_robot_walk.glb"
   },

@@ -8,7 +8,7 @@ import {
   type BoxLegName,
   type BoxQuadrupedCalibration,
 } from "@/lib/boxQuadrupedConfig";
-import { buildMockPoseFrame, type RobotPoseFrame } from "@/lib/robotPose";
+import { buildIkTrotLegStates, buildMockPoseFrame, type RobotPoseFrame } from "@/lib/robotPose";
 
 type Props = {
   poseFrame: RobotPoseFrame | null;
@@ -28,6 +28,8 @@ const LEG_TO_JOINTS: Record<
 
 const FRONT_LEG_COLOR = "#ff2b2b";
 const BACK_LEG_COLOR = "#2f6bff";
+const STANCE_COLOR = "#35d46f";
+const SWING_COLOR = "#ffb12f";
 
 function getLegDebugColor(legName: BoxLegName): string {
   return legName.startsWith("front_") ? FRONT_LEG_COLOR : BACK_LEG_COLOR;
@@ -113,6 +115,7 @@ export function BoxQuadrupedDebug({
   const rootRef = useRef<THREE.Group | null>(null);
   const bodyAssemblyRef = useRef<THREE.Group | null>(null);
   const jointGroupsRef = useRef<Record<string, THREE.Group | null>>({});
+  const footTargetRefs = useRef<Record<string, THREE.Mesh | null>>({});
 
   const legs = useMemo(
     () =>
@@ -146,6 +149,17 @@ export function BoxQuadrupedDebug({
         elbowGroup.rotation.x = calibration.elbowAngleSign * frame.joints[joints.elbow];
       }
     }
+
+    for (const state of buildIkTrotLegStates(clock.getElapsedTime(), calibration)) {
+      const marker = footTargetRefs.current[state.legName];
+      if (!marker) {
+        continue;
+      }
+      marker.position.set(...state.footTargetBody);
+      if (marker.material instanceof THREE.MeshBasicMaterial) {
+        marker.material.color.set(state.inStance ? STANCE_COLOR : SWING_COLOR);
+      }
+    }
   });
 
   return (
@@ -169,6 +183,17 @@ export function BoxQuadrupedDebug({
             lowerLegRestAxisAngle={calibration.lowerLegRestAxisAngle[legName]}
             groupsRef={jointGroupsRef}
           />
+        ))}
+        {legs.map(([legName]) => (
+          <mesh
+            key={`${legName}-target`}
+            ref={(node) => {
+              footTargetRefs.current[legName] = node;
+            }}
+          >
+            <sphereGeometry args={[0.22, 12, 12]} />
+            <meshBasicMaterial color={STANCE_COLOR} />
+          </mesh>
         ))}
       </group>
     </group>

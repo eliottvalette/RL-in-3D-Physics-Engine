@@ -41,7 +41,7 @@ const UPPER_LEG_SIZE: Vec3 = [1.3, 3.9, 1.6753];
 const LOWER_LEG_SIZE: Vec3 = [0.752, 4.9, 1.1237];
 
 const SHOULDER_ANGLE_SIGN = -1;
-const ELBOW_ANGLE_SIGN = -1;
+const ELBOW_ANGLE_SIGN = 1;
 
 const FRONT_SHOULDER_X = 2.77;
 const FRONT_SHOULDER_Y = 0.55;

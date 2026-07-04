@@ -584,16 +584,19 @@ class QuadrupedEnv:
                 foot_slip_speed_max - FOOT_SLIP_SPEED_THRESHOLD - FOOT_SLIP_SPEED_TOLERANCE,
                 0.0,
             )
-            traction_reward_scale = CONTACT_QUALITY_SCALE_FLOOR + (
-                1.0 - CONTACT_QUALITY_SCALE_FLOOR
-            ) * (
-                1.0
-                - np.clip(
-                    traction_slip_excess / max(FOOT_SLIP_SPEED_THRESHOLD, 1e-9),
-                    0.0,
-                    1.0,
+            if REWARD_TRACTION_SCALE_ENABLED:
+                traction_reward_scale = CONTACT_QUALITY_SCALE_FLOOR + (
+                    1.0 - CONTACT_QUALITY_SCALE_FLOOR
+                ) * (
+                    1.0
+                    - np.clip(
+                        traction_slip_excess / max(FOOT_SLIP_SPEED_THRESHOLD, 1e-9),
+                        0.0,
+                        1.0,
+                    )
                 )
-            )
+            else:
+                traction_reward_scale = 1.0
         else:
             foot_slip_penalty = 0.0
             foot_slip_speed_mean = 0.0
@@ -630,10 +633,13 @@ class QuadrupedEnv:
         forward_speed_reward_scale = float(
             np.clip(forward_progress_speed_m_s / max(FORWARD_SPEED_TARGET_M_S, 1e-9), 0.0, 1.0)
         )
-        target_progress_scale = CONTACT_QUALITY_SCALE_FLOOR + (
-            1.0 - CONTACT_QUALITY_SCALE_FLOOR
-        ) * forward_speed_reward_scale
-        target_progress_scale = float(np.clip(target_progress_scale, 0.0, 1.0))
+        if REWARD_TARGET_PROGRESS_SCALE_ENABLED:
+            target_progress_scale = CONTACT_QUALITY_SCALE_FLOOR + (
+                1.0 - CONTACT_QUALITY_SCALE_FLOOR
+            ) * forward_speed_reward_scale
+            target_progress_scale = float(np.clip(target_progress_scale, 0.0, 1.0))
+        else:
+            target_progress_scale = 1.0
 
         diagonal_a_contact = bool(foot_contact_mask[0] and foot_contact_mask[3])
         diagonal_b_contact = bool(foot_contact_mask[1] and foot_contact_mask[2])

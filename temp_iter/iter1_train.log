@@ -1,0 +1,1456 @@
+pygame 2.6.1 (SDL 2.28.4, Python 3.10.12)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+[ITER1] target_progress_scale_enabled=False
+[ITER1] traction_scale_enabled=False
+[AGENT] Modele charge avec succes: saved_models/quadruped_agent.pth
+
+[TRAIN] Episode [1/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.224
+[TRAIN] Progress: 6.416
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.04 seconds
+
+[TRAIN] Episode [2/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.494
+[TRAIN] Progress: 6.351
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.91 seconds
+
+[TRAIN] Episode [3/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.586
+[TRAIN] Progress: 5.756
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.99 seconds
+
+[TRAIN] Episode [4/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.956
+[TRAIN] Progress: 6.516
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.01 seconds
+
+[TRAIN] Episode [5/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.353
+[TRAIN] Progress: 5.849
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.92 seconds
+
+[TRAIN] Episode [6/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.344
+[TRAIN] Progress: 6.555
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.93 seconds
+
+[TRAIN] Episode [7/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.557
+[TRAIN] Progress: 5.889
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.91 seconds
+
+[TRAIN] Episode [8/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.548
+[TRAIN] Progress: 5.834
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.95 seconds
+
+[TRAIN] Episode [9/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.197
+[TRAIN] Progress: 6.153
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.89 seconds
+
+[TRAIN] Episode [10/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.126
+[TRAIN] Progress: 5.200
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=6.314 progress=4.961 clean=1.00
+[TRAIN] Time taken: 4.10 seconds
+
+[TRAIN] Episode [11/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 4.764
+[TRAIN] Progress: 5.051
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.02 seconds
+
+[TRAIN] Episode [12/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.576
+[TRAIN] Progress: 4.916
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.11 seconds
+
+[TRAIN] Episode [13/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.231
+[TRAIN] Progress: 5.969
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.91 seconds
+
+[TRAIN] Episode [14/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.283
+[TRAIN] Progress: 5.479
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.93 seconds
+
+[TRAIN] Episode [15/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.728
+[TRAIN] Progress: 6.665
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.92 seconds
+
+[TRAIN] Episode [16/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.460
+[TRAIN] Progress: 6.213
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.98 seconds
+
+[TRAIN] Episode [17/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.461
+[TRAIN] Progress: 6.358
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.89 seconds
+
+[TRAIN] Episode [18/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.203
+[TRAIN] Progress: 5.587
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.93 seconds
+
+[TRAIN] Episode [19/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.804
+[TRAIN] Progress: 5.868
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.06 seconds
+
+[TRAIN] Episode [20/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.371
+[TRAIN] Progress: 5.381
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=5.981 progress=4.869 clean=1.00
+[TRAIN] Time taken: 4.12 seconds
+
+[TRAIN] Episode [21/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.394
+[TRAIN] Progress: 5.938
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.97 seconds
+
+[TRAIN] Episode [22/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.906
+[TRAIN] Progress: 6.279
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.87 seconds
+
+[TRAIN] Episode [23/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.846
+[TRAIN] Progress: 6.461
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.92 seconds
+
+[TRAIN] Episode [24/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.420
+[TRAIN] Progress: 6.260
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.95 seconds
+
+[TRAIN] Episode [25/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.682
+[TRAIN] Progress: 6.119
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.93 seconds
+
+[TRAIN] Episode [26/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.714
+[TRAIN] Progress: 6.384
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.06 seconds
+
+[TRAIN] Episode [27/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.455
+[TRAIN] Progress: 5.887
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.16 seconds
+
+[TRAIN] Episode [28/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.168
+[TRAIN] Progress: 6.669
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.87 seconds
+
+[TRAIN] Episode [29/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.978
+[TRAIN] Progress: 6.456
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.93 seconds
+
+[TRAIN] Episode [30/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.450
+[TRAIN] Progress: 5.884
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=6.712 progress=5.854 clean=1.00
+[TRAIN] Time taken: 4.22 seconds
+
+[TRAIN] Episode [31/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.083
+[TRAIN] Progress: 6.837
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.09 seconds
+
+[TRAIN] Episode [32/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.560
+[TRAIN] Progress: 6.466
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.12 seconds
+
+[TRAIN] Episode [33/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.827
+[TRAIN] Progress: 6.294
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.08 seconds
+
+[TRAIN] Episode [34/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.374
+[TRAIN] Progress: 6.585
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.03 seconds
+
+[TRAIN] Episode [35/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.711
+[TRAIN] Progress: 6.876
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.17 seconds
+
+[TRAIN] Episode [36/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.217
+[TRAIN] Progress: 6.655
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.05 seconds
+
+[TRAIN] Episode [37/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.150
+[TRAIN] Progress: 6.693
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.04 seconds
+
+[TRAIN] Episode [38/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.893
+[TRAIN] Progress: 6.653
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.18 seconds
+
+[TRAIN] Episode [39/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.115
+[TRAIN] Progress: 6.508
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.24 seconds
+
+[TRAIN] Episode [40/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.342
+[TRAIN] Progress: 7.285
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=7.191 progress=5.432 clean=1.00
+[TRAIN] Time taken: 4.33 seconds
+
+[TRAIN] Episode [41/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.226
+[TRAIN] Progress: 6.497
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.22 seconds
+
+[TRAIN] Episode [42/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.794
+[TRAIN] Progress: 7.048
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.95 seconds
+
+[TRAIN] Episode [43/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.472
+[TRAIN] Progress: 6.382
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.79 seconds
+
+[TRAIN] Episode [44/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.348
+[TRAIN] Progress: 6.550
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.33 seconds
+
+[TRAIN] Episode [45/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.244
+[TRAIN] Progress: 6.201
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.16 seconds
+
+[TRAIN] Episode [46/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.651
+[TRAIN] Progress: 6.560
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.25 seconds
+
+[TRAIN] Episode [47/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.650
+[TRAIN] Progress: 6.648
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.21 seconds
+
+[TRAIN] Episode [48/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.177
+[TRAIN] Progress: 7.118
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.08 seconds
+
+[TRAIN] Episode [49/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.253
+[TRAIN] Progress: 6.341
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.49 seconds
+
+[TRAIN] Episode [50/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.008
+[TRAIN] Progress: 6.093
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=7.328 progress=6.192 clean=1.00
+[TRAIN] Time taken: 4.52 seconds
+
+[TRAIN] Episode [51/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.471
+[TRAIN] Progress: 6.489
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.17 seconds
+
+[TRAIN] Episode [52/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.995
+[TRAIN] Progress: 8.191
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.14 seconds
+
+[TRAIN] Episode [53/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.487
+[TRAIN] Progress: 6.514
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.12 seconds
+
+[TRAIN] Episode [54/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.640
+[TRAIN] Progress: 6.940
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.16 seconds
+
+[TRAIN] Episode [55/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.239
+[TRAIN] Progress: 7.567
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.19 seconds
+
+[TRAIN] Episode [56/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.553
+[TRAIN] Progress: 7.188
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.12 seconds
+
+[TRAIN] Episode [57/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.387
+[TRAIN] Progress: 6.691
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.15 seconds
+
+[TRAIN] Episode [58/300]
+[TRAIN] Steps: 566
+[TRAIN] Reward: 2.323
+[TRAIN] Progress: 5.330
+[TRAIN] Done reason: critical_tilt
+[TRAIN] Time taken: 1.63 seconds
+
+[TRAIN] Episode [59/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.640
+[TRAIN] Progress: 6.923
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.10 seconds
+
+[TRAIN] Episode [60/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.827
+[TRAIN] Progress: 5.743
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=6.878 progress=5.497 clean=1.00
+[TRAIN] Time taken: 4.40 seconds
+
+[TRAIN] Episode [61/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.973
+[TRAIN] Progress: 6.783
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.22 seconds
+
+[TRAIN] Episode [62/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.134
+[TRAIN] Progress: 7.079
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.06 seconds
+
+[TRAIN] Episode [63/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.504
+[TRAIN] Progress: 5.499
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.19 seconds
+
+[TRAIN] Episode [64/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.954
+[TRAIN] Progress: 6.921
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.00 seconds
+
+[TRAIN] Episode [65/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.861
+[TRAIN] Progress: 7.097
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.05 seconds
+
+[TRAIN] Episode [66/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.584
+[TRAIN] Progress: 6.444
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.07 seconds
+
+[TRAIN] Episode [67/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.621
+[TRAIN] Progress: 6.725
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.09 seconds
+
+[TRAIN] Episode [68/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.156
+[TRAIN] Progress: 6.033
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.09 seconds
+
+[TRAIN] Episode [69/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.944
+[TRAIN] Progress: 6.582
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.04 seconds
+
+[TRAIN] Episode [70/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.325
+[TRAIN] Progress: 6.216
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=7.039 progress=6.913 clean=1.00
+[TRAIN] Time taken: 4.38 seconds
+
+[TRAIN] Episode [71/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.577
+[TRAIN] Progress: 6.134
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.08 seconds
+
+[TRAIN] Episode [72/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.846
+[TRAIN] Progress: 6.549
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.95 seconds
+
+[TRAIN] Episode [73/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.363
+[TRAIN] Progress: 6.330
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.16 seconds
+
+[TRAIN] Episode [74/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.337
+[TRAIN] Progress: 7.114
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.12 seconds
+
+[TRAIN] Episode [75/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.394
+[TRAIN] Progress: 6.602
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.99 seconds
+
+[TRAIN] Episode [76/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.586
+[TRAIN] Progress: 5.648
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.18 seconds
+
+[TRAIN] Episode [77/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.762
+[TRAIN] Progress: 6.603
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.05 seconds
+
+[TRAIN] Episode [78/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.114
+[TRAIN] Progress: 5.831
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.05 seconds
+
+[TRAIN] Episode [79/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.017
+[TRAIN] Progress: 6.232
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.16 seconds
+
+[TRAIN] Episode [80/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.488
+[TRAIN] Progress: 6.439
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=7.174 progress=6.210 clean=1.00
+[TRAIN] Time taken: 4.44 seconds
+
+[TRAIN] Episode [81/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.201
+[TRAIN] Progress: 6.215
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.09 seconds
+
+[TRAIN] Episode [82/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.852
+[TRAIN] Progress: 5.852
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.17 seconds
+
+[TRAIN] Episode [83/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.986
+[TRAIN] Progress: 6.685
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.21 seconds
+
+[TRAIN] Episode [84/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.809
+[TRAIN] Progress: 6.726
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.14 seconds
+
+[TRAIN] Episode [85/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.049
+[TRAIN] Progress: 7.204
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.15 seconds
+
+[TRAIN] Episode [86/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.596
+[TRAIN] Progress: 7.042
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.14 seconds
+
+[TRAIN] Episode [87/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.069
+[TRAIN] Progress: 6.594
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.22 seconds
+
+[TRAIN] Episode [88/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.096
+[TRAIN] Progress: 7.339
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.12 seconds
+
+[TRAIN] Episode [89/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.258
+[TRAIN] Progress: 6.257
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.34 seconds
+
+[TRAIN] Episode [90/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.496
+[TRAIN] Progress: 6.864
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=7.252 progress=7.105 clean=1.00
+[TRAIN] Time taken: 4.87 seconds
+
+[TRAIN] Episode [91/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.990
+[TRAIN] Progress: 6.292
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.08 seconds
+
+[TRAIN] Episode [92/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.245
+[TRAIN] Progress: 6.402
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.14 seconds
+
+[TRAIN] Episode [93/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.275
+[TRAIN] Progress: 6.955
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.03 seconds
+
+[TRAIN] Episode [94/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.977
+[TRAIN] Progress: 6.682
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.93 seconds
+
+[TRAIN] Episode [95/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.303
+[TRAIN] Progress: 6.500
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.13 seconds
+
+[TRAIN] Episode [96/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.272
+[TRAIN] Progress: 6.589
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.02 seconds
+
+[TRAIN] Episode [97/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.186
+[TRAIN] Progress: 6.480
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.93 seconds
+
+[TRAIN] Episode [98/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 4.733
+[TRAIN] Progress: 6.903
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.82 seconds
+
+[TRAIN] Episode [99/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.122
+[TRAIN] Progress: 6.528
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.06 seconds
+
+[TRAIN] Episode [100/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.158
+[TRAIN] Progress: 6.742
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=5.368 progress=7.915 clean=1.00
+[TRAIN] Time taken: 5.71 seconds
+
+[TRAIN] Episode [101/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.037
+[TRAIN] Progress: 6.036
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.03 seconds
+
+[TRAIN] Episode [102/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.130
+[TRAIN] Progress: 7.131
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.20 seconds
+
+[TRAIN] Episode [103/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.124
+[TRAIN] Progress: 6.948
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.01 seconds
+
+[TRAIN] Episode [104/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.060
+[TRAIN] Progress: 6.583
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.07 seconds
+
+[TRAIN] Episode [105/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.179
+[TRAIN] Progress: 7.322
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.04 seconds
+
+[TRAIN] Episode [106/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.079
+[TRAIN] Progress: 7.020
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.15 seconds
+
+[TRAIN] Episode [107/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.821
+[TRAIN] Progress: 6.869
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.05 seconds
+
+[TRAIN] Episode [108/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.046
+[TRAIN] Progress: 6.656
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.96 seconds
+
+[TRAIN] Episode [109/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.080
+[TRAIN] Progress: 6.789
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.04 seconds
+
+[TRAIN] Episode [110/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.104
+[TRAIN] Progress: 6.310
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=8.027 progress=7.311 clean=1.00
+[TRAIN] Time taken: 4.27 seconds
+
+[TRAIN] Episode [111/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.780
+[TRAIN] Progress: 6.792
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.05 seconds
+
+[TRAIN] Episode [112/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.836
+[TRAIN] Progress: 7.066
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.09 seconds
+
+[TRAIN] Episode [113/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.417
+[TRAIN] Progress: 6.330
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.19 seconds
+
+[TRAIN] Episode [114/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.960
+[TRAIN] Progress: 6.843
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.19 seconds
+
+[TRAIN] Episode [115/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.151
+[TRAIN] Progress: 7.261
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.09 seconds
+
+[TRAIN] Episode [116/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.250
+[TRAIN] Progress: 7.161
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.25 seconds
+
+[TRAIN] Episode [117/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.539
+[TRAIN] Progress: 7.584
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.13 seconds
+
+[TRAIN] Episode [118/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.336
+[TRAIN] Progress: 6.476
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.10 seconds
+
+[TRAIN] Episode [119/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.400
+[TRAIN] Progress: 6.881
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.12 seconds
+
+[TRAIN] Episode [120/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.520
+[TRAIN] Progress: 6.951
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=7.575 progress=7.005 clean=1.00
+[TRAIN] Time taken: 4.43 seconds
+
+[TRAIN] Episode [121/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.754
+[TRAIN] Progress: 6.762
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.09 seconds
+
+[TRAIN] Episode [122/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.192
+[TRAIN] Progress: 7.087
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.96 seconds
+
+[TRAIN] Episode [123/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.590
+[TRAIN] Progress: 6.696
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.11 seconds
+
+[TRAIN] Episode [124/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.815
+[TRAIN] Progress: 6.818
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.15 seconds
+
+[TRAIN] Episode [125/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.644
+[TRAIN] Progress: 7.114
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.05 seconds
+
+[TRAIN] Episode [126/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.738
+[TRAIN] Progress: 6.105
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.25 seconds
+
+[TRAIN] Episode [127/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.993
+[TRAIN] Progress: 6.357
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.19 seconds
+
+[TRAIN] Episode [128/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.633
+[TRAIN] Progress: 6.204
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.10 seconds
+
+[TRAIN] Episode [129/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.199
+[TRAIN] Progress: 5.681
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.98 seconds
+
+[TRAIN] Episode [130/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.615
+[TRAIN] Progress: 6.967
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=7.359 progress=5.921 clean=1.00
+[TRAIN] Time taken: 4.72 seconds
+
+[TRAIN] Episode [131/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.720
+[TRAIN] Progress: 6.267
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.28 seconds
+
+[TRAIN] Episode [132/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.165
+[TRAIN] Progress: 6.196
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.14 seconds
+
+[TRAIN] Episode [133/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.903
+[TRAIN] Progress: 6.837
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.21 seconds
+
+[TRAIN] Episode [134/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.436
+[TRAIN] Progress: 6.759
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.96 seconds
+
+[TRAIN] Episode [135/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.557
+[TRAIN] Progress: 6.056
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.01 seconds
+
+[TRAIN] Episode [136/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.940
+[TRAIN] Progress: 5.849
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.23 seconds
+
+[TRAIN] Episode [137/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.742
+[TRAIN] Progress: 6.396
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.06 seconds
+
+[TRAIN] Episode [138/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.720
+[TRAIN] Progress: 5.880
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.95 seconds
+
+[TRAIN] Episode [139/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.697
+[TRAIN] Progress: 6.645
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.08 seconds
+
+[TRAIN] Episode [140/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.672
+[TRAIN] Progress: 6.758
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=7.701 progress=6.689 clean=1.00
+[TRAIN] Time taken: 3.98 seconds
+
+[TRAIN] Episode [141/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.718
+[TRAIN] Progress: 6.975
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.91 seconds
+
+[TRAIN] Episode [142/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.158
+[TRAIN] Progress: 6.844
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.00 seconds
+
+[TRAIN] Episode [143/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.994
+[TRAIN] Progress: 6.944
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.96 seconds
+
+[TRAIN] Episode [144/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.210
+[TRAIN] Progress: 6.695
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.94 seconds
+
+[TRAIN] Episode [145/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.315
+[TRAIN] Progress: 6.960
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.84 seconds
+
+[TRAIN] Episode [146/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.694
+[TRAIN] Progress: 6.958
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.93 seconds
+
+[TRAIN] Episode [147/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.406
+[TRAIN] Progress: 7.283
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.97 seconds
+
+[TRAIN] Episode [148/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.766
+[TRAIN] Progress: 6.869
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.93 seconds
+
+[TRAIN] Episode [149/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.072
+[TRAIN] Progress: 7.251
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.95 seconds
+
+[TRAIN] Episode [150/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.170
+[TRAIN] Progress: 6.846
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=8.003 progress=7.178 clean=1.00
+[TRAIN] Time taken: 4.21 seconds
+
+[TRAIN] Episode [151/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.794
+[TRAIN] Progress: 7.530
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.12 seconds
+
+[TRAIN] Episode [152/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.159
+[TRAIN] Progress: 7.273
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.86 seconds
+
+[TRAIN] Episode [153/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.840
+[TRAIN] Progress: 7.243
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.14 seconds
+
+[TRAIN] Episode [154/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.734
+[TRAIN] Progress: 7.503
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.09 seconds
+
+[TRAIN] Episode [155/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.920
+[TRAIN] Progress: 7.428
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.19 seconds
+
+[TRAIN] Episode [156/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.378
+[TRAIN] Progress: 7.539
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.97 seconds
+
+[TRAIN] Episode [157/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.881
+[TRAIN] Progress: 6.844
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.07 seconds
+
+[TRAIN] Episode [158/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.576
+[TRAIN] Progress: 6.652
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.13 seconds
+
+[TRAIN] Episode [159/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.973
+[TRAIN] Progress: 7.122
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.11 seconds
+
+[TRAIN] Episode [160/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.832
+[TRAIN] Progress: 7.309
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=8.307 progress=7.482 clean=1.00
+[TRAIN] Time taken: 4.39 seconds
+
+[TRAIN] Episode [161/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.938
+[TRAIN] Progress: 7.062
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.03 seconds
+
+[TRAIN] Episode [162/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.119
+[TRAIN] Progress: 7.026
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.09 seconds
+
+[TRAIN] Episode [163/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.199
+[TRAIN] Progress: 7.020
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.99 seconds
+
+[TRAIN] Episode [164/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.709
+[TRAIN] Progress: 6.317
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.12 seconds
+
+[TRAIN] Episode [165/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.707
+[TRAIN] Progress: 6.533
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.14 seconds
+
+[TRAIN] Episode [166/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.348
+[TRAIN] Progress: 6.825
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.14 seconds
+
+[TRAIN] Episode [167/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.072
+[TRAIN] Progress: 6.736
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.24 seconds
+
+[TRAIN] Episode [168/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.240
+[TRAIN] Progress: 6.519
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.06 seconds
+
+[TRAIN] Episode [169/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.837
+[TRAIN] Progress: 6.520
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.02 seconds
+
+[TRAIN] Episode [170/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.175
+[TRAIN] Progress: 6.453
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=7.184 progress=6.506 clean=1.00
+[TRAIN] Time taken: 4.22 seconds
+
+[TRAIN] Episode [171/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.177
+[TRAIN] Progress: 6.978
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.06 seconds
+
+[TRAIN] Episode [172/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.525
+[TRAIN] Progress: 7.049
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.19 seconds
+
+[TRAIN] Episode [173/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.061
+[TRAIN] Progress: 6.366
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.06 seconds
+
+[TRAIN] Episode [174/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.750
+[TRAIN] Progress: 6.750
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.02 seconds
+
+[TRAIN] Episode [175/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.215
+[TRAIN] Progress: 6.862
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.01 seconds
+
+[TRAIN] Episode [176/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.288
+[TRAIN] Progress: 6.937
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.05 seconds
+
+[TRAIN] Episode [177/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.928
+[TRAIN] Progress: 6.564
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.97 seconds
+
+[TRAIN] Episode [178/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.039
+[TRAIN] Progress: 6.242
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.98 seconds
+
+[TRAIN] Episode [179/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.327
+[TRAIN] Progress: 7.522
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.01 seconds
+
+[TRAIN] Episode [180/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.548
+[TRAIN] Progress: 7.018
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=6.073 progress=6.918 clean=1.00
+[TRAIN] Time taken: 4.15 seconds
+
+[TRAIN] Episode [181/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.075
+[TRAIN] Progress: 7.232
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.04 seconds
+
+[TRAIN] Episode [182/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.013
+[TRAIN] Progress: 7.302
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.09 seconds
+
+[TRAIN] Episode [183/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.439
+[TRAIN] Progress: 7.489
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.03 seconds
+
+[TRAIN] Episode [184/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.863
+[TRAIN] Progress: 7.132
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.58 seconds
+
+[TRAIN] Episode [185/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.462
+[TRAIN] Progress: 7.092
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.05 seconds
+
+[TRAIN] Episode [186/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.856
+[TRAIN] Progress: 7.589
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.02 seconds
+
+[TRAIN] Episode [187/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.664
+[TRAIN] Progress: 7.836
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.91 seconds
+
+[TRAIN] Episode [188/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 3.830
+[TRAIN] Progress: 6.166
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.97 seconds
+
+[TRAIN] Episode [189/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 4.866
+[TRAIN] Progress: 7.370
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.97 seconds
+
+[TRAIN] Episode [190/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.873
+[TRAIN] Progress: 8.040
+[TRAIN] Done reason: running
+[TRAIN] Eval: reward=1.987 progress=6.951 clean=0.00
+[TRAIN] Time taken: 3.88 seconds
+
+[TRAIN] Episode [191/300]
+[TRAIN] Steps: 525
+[TRAIN] Reward: 1.634
+[TRAIN] Progress: 5.215
+[TRAIN] Done reason: critical_tilt
+[TRAIN] Time taken: 1.46 seconds
+
+[TRAIN] Episode [192/300]
+[TRAIN] Steps: 719
+[TRAIN] Reward: 3.243
+[TRAIN] Progress: 7.087
+[TRAIN] Done reason: critical_tilt
+[TRAIN] Time taken: 1.97 seconds
+
+[TRAIN] Episode [193/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.247
+[TRAIN] Progress: 7.283
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.95 seconds
+
+[TRAIN] Episode [194/300]
+[TRAIN] Steps: 685
+[TRAIN] Reward: 2.370
+[TRAIN] Progress: 7.015
+[TRAIN] Done reason: critical_tilt
+[TRAIN] Time taken: 1.85 seconds
+
+[TRAIN] Episode [195/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.596
+[TRAIN] Progress: 7.806
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.06 seconds
+
+[TRAIN] Episode [196/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.687
+[TRAIN] Progress: 7.148
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.98 seconds
+
+[TRAIN] Episode [197/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.025
+[TRAIN] Progress: 7.942
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.08 seconds
+
+[TRAIN] Episode [198/300]
+[TRAIN] Steps: 739
+[TRAIN] Reward: 3.626
+[TRAIN] Progress: 7.305
+[TRAIN] Done reason: too_low
+[TRAIN] Time taken: 2.06 seconds
+
+[TRAIN] Episode [199/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 5.780
+[TRAIN] Progress: 7.567
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 1.99 seconds
+
+[TRAIN] Episode [200/300]
+[TRAIN] Steps: 515
+[TRAIN] Reward: 1.885
+[TRAIN] Progress: 5.546
+[TRAIN] Done reason: too_low
+[TRAIN] Eval: reward=7.363 progress=7.893 clean=1.00
+[TRAIN] Time taken: 5.10 seconds
+
+[TRAIN] Episode [201/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 7.192
+[TRAIN] Progress: 7.536
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.10 seconds
+
+[TRAIN] Episode [202/300]
+[TRAIN] Steps: 256
+[TRAIN] Reward: -1.649
+[TRAIN] Progress: 2.590
+[TRAIN] Done reason: too_low
+[TRAIN] Time taken: 0.71 seconds
+
+[TRAIN] Episode [203/300]
+[TRAIN] Steps: 166
+[TRAIN] Reward: -1.658
+[TRAIN] Progress: 2.044
+[TRAIN] Done reason: too_low
+[TRAIN] Time taken: 0.42 seconds
+
+[TRAIN] Episode [204/300]
+[TRAIN] Steps: 750
+[TRAIN] Reward: 6.062
+[TRAIN] Progress: 7.500
+[TRAIN] Done reason: running
+[TRAIN] Time taken: 2.15 seconds
+
+[TRAIN] Episode [205/300]
+[TRAIN] Steps: 750

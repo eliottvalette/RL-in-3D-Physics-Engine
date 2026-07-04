@@ -1,7 +1,15 @@
 # config.py
+import os
 import numpy as np
 import random as rd
 import torch
+
+
+def _env_bool(name, default):
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
 
 # --- Configuration ---
 PHYSICS_HZ = 120
@@ -118,6 +126,17 @@ NON_DIAGONAL_SUPPORT_GRACE_STEPS = 12
 NON_DIAGONAL_SUPPORT_WINDOW_STEPS = 120
 CONTACT_QUALITY_MIN_LEGS = 2
 CONTACT_QUALITY_SCALE_FLOOR = 0.25
+
+# --- Reward shaping toggles (iter1: free the gradient) ---------------
+# Default = legacy True; flip to 0 via env var REWARD_*_ENABLED for experiments.
+# REWARD_TARGET_PROGRESS_SCALE: when True, positive locomotion reward is scaled
+# by target_progress_scale, which amortizes ~76% of the signal at low speed
+# and creates an asymmetry rewarding not moving over moving slowly.
+REWARD_TARGET_PROGRESS_SCALE_ENABLED = _env_bool("REWARD_TARGET_PROGRESS_SCALE_ENABLED", True)
+# REWARD_TRACTION_SCALE: when True, forward/diag/swing/locomotion rewards are
+# scaled down when feet slip. Slip is still penalized via foot_slip_penalty
+# regardless of this toggle.
+REWARD_TRACTION_SCALE_ENABLED = _env_bool("REWARD_TRACTION_SCALE_ENABLED", True)
 MIN_BODY_HEIGHT = 3.2
 MAX_BODY_HEIGHT = 5.5
 HEIGHT_SOFT_REWARD_MARGIN = 0.25
