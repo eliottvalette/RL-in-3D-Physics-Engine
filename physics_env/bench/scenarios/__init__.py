@@ -1,6 +1,7 @@
 """Bench scenario registry."""
 
 from .air_spin import AirSpinScenario
+from .demo_gait_animation import DemoGaitAnimationScenario
 from .drop_flat import DropFlatScenario
 from .drop_tilted import DropTiltedScenario
 from .front_legs_lifted import FrontLegsLiftedScenario
@@ -12,6 +13,7 @@ from .slide_x import SlideXScenario
 
 SCENARIOS = {
     "air_spin": AirSpinScenario(),
+    "demo_gait_animation": DemoGaitAnimationScenario(),
     "drop_flat": DropFlatScenario(),
     "drop_tilted": DropTiltedScenario(),
     "front_legs_lifted": FrontLegsLiftedScenario(),

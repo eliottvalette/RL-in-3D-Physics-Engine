@@ -36,11 +36,19 @@ class QuadrupedEnv:
         "Flèches - Rotation caméra",
         "Espace - Reset quadruped",
         "B - Reset articulations",
+        "X - Animation gait actions on/off",
         "R/F/T/G/Y/H/U/J - Épaules (FR,FL,BR,BL)",
         "1-8 - Coudes (FR,FL,BR,BL)",
         "P - Afficher les sommets",
         "Échap - Quitter"
     ]
+
+    DEMO_GAIT_CYCLE_STEPS = int(PHYSICS_HZ * 1.15)
+    DEMO_GAIT_ACTION_DEADBAND = 0.035
+    DEMO_GAIT_SHOULDER_CENTER = 0.65
+    DEMO_GAIT_SHOULDER_AMPLITUDE = 0.08
+    DEMO_GAIT_ELBOW_CENTER = -1.55
+    DEMO_GAIT_ELBOW_AMPLITUDE = 0.06
     def __init__(self, rendering=True, headless=False, bench_mode=False):
         """Initialize the game, Pygame, and world objects."""
         pygame.init()
@@ -86,6 +94,8 @@ class QuadrupedEnv:
         self.prev_action = np.zeros(8, dtype=np.float32)
         self.last_reward_components = {}
         self.last_done_reason = "running"
+        self.demo_animation_enabled = False
+        self.demo_gait_step = 0
 
     def _reset_safety_counters(self):
         self.consecutive_steps_below_critical_height = 0
@@ -160,6 +170,7 @@ class QuadrupedEnv:
         self.quadruped.steps_since_too_high = 0
         self.quadruped.too_low = False
         self.quadruped.steps_since_too_low = 0
+        self.demo_gait_step = 0
 
     @staticmethod
     def _normalize_contact_steps(steps_since_contact, has_contact_history, max_steps):
@@ -251,7 +262,7 @@ class QuadrupedEnv:
         while running:
             running = self.handle_events()
             keys = pygame.key.get_pressed()
-            shoulder_actions, elbow_actions = self.handle_joint_controls(keys)
+            manual_shoulder_actions, manual_elbow_actions = self.handle_joint_controls(keys)
             camera_actions = self.handle_camera_controls(keys)
             reset_actions = [0, 0]
             if keys[K_SPACE]:
@@ -268,6 +279,12 @@ class QuadrupedEnv:
             done = False
             step_time = 0.0
             for substep_idx in range(PHYSICS_STEPS_PER_RENDER):
+                if self.demo_animation_enabled:
+                    shoulder_actions, elbow_actions = self._demo_gait_actions()
+                    self.demo_gait_step += 1
+                else:
+                    shoulder_actions = manual_shoulder_actions
+                    elbow_actions = manual_elbow_actions
                 step_camera_actions = camera_actions if substep_idx == 0 else [0] * 10
                 step_reset_actions = reset_actions if substep_idx == 0 else [0, 0]
                 _, reward, done, substep_time = self.step(
@@ -294,6 +311,11 @@ class QuadrupedEnv:
             elif event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
                     return False
+                if event.key == K_x:
+                    self.demo_animation_enabled = not self.demo_animation_enabled
+                    self.demo_gait_step = 0
+                    status = "enabled" if self.demo_animation_enabled else "disabled"
+                    print(f"[DEMO_GAIT] action animation {status}")
         return True
 
     def handle_camera_controls(self, keys):
@@ -335,6 +357,68 @@ class QuadrupedEnv:
             if keys[key]:
                 elbow_actions[idx] = sign
         return shoulder_actions, elbow_actions
+
+    def _joint_tracking_action(self, current_angle, target_angle):
+        error = float(target_angle - current_angle)
+        if abs(error) <= self.DEMO_GAIT_ACTION_DEADBAND:
+            return 0.0
+        return 1.0 if error > 0.0 else -1.0
+
+    def _demo_gait_targets(self):
+        phase = (self.demo_gait_step % self.DEMO_GAIT_CYCLE_STEPS) / self.DEMO_GAIT_CYCLE_STEPS
+        leg_phase_offsets = np.array([0.0, 0.5, 0.5, 0.0], dtype=np.float64)
+        phases = (phase + leg_phase_offsets) % 1.0
+
+        shoulder_targets = (
+            self.DEMO_GAIT_SHOULDER_CENTER
+            + self.DEMO_GAIT_SHOULDER_AMPLITUDE * np.sin(2.0 * np.pi * phases)
+        )
+        swing_lift = np.maximum(np.sin(2.0 * np.pi * phases), 0.0)
+        elbow_targets = self.DEMO_GAIT_ELBOW_CENTER + self.DEMO_GAIT_ELBOW_AMPLITUDE * swing_lift
+
+        shoulder_targets = np.clip(shoulder_targets, SHOULDER_ANGLE_MIN, SHOULDER_ANGLE_MAX)
+        elbow_targets = np.clip(elbow_targets, ELBOW_ANGLE_MIN, ELBOW_ANGLE_MAX)
+        return shoulder_targets, elbow_targets
+
+    def _demo_gait_actions(self):
+        shoulder_targets, elbow_targets = self._demo_gait_targets()
+        shoulder_actions = np.array(
+            [
+                self._joint_tracking_action(current_angle, target_angle)
+                for current_angle, target_angle in zip(
+                    self.quadruped.shoulder_angles,
+                    shoulder_targets,
+                )
+            ],
+            dtype=np.float32,
+        )
+        elbow_actions = np.array(
+            [
+                self._joint_tracking_action(current_angle, target_angle)
+                for current_angle, target_angle in zip(
+                    self.quadruped.elbow_angles,
+                    elbow_targets,
+                )
+            ],
+            dtype=np.float32,
+        )
+
+        if shoulder_actions.shape != (4,) or elbow_actions.shape != (4,):
+            raise RuntimeError(
+                f"Demo gait produced invalid action shapes: "
+                f"shoulders={shoulder_actions.shape}, elbows={elbow_actions.shape}"
+            )
+        if not np.all(np.isfinite(shoulder_actions)) or not np.all(np.isfinite(elbow_actions)):
+            raise RuntimeError("Demo gait produced non-finite joint actions")
+        if not (
+            np.all(np.isin(shoulder_actions, [-1.0, 0.0, 1.0]))
+            and np.all(np.isin(elbow_actions, [-1.0, 0.0, 1.0]))
+        ):
+            raise RuntimeError(
+                f"Demo gait produced invalid action values: "
+                f"shoulders={shoulder_actions}, elbows={elbow_actions}"
+            )
+        return shoulder_actions.tolist(), elbow_actions.tolist()
     
     def step(self, shoulder_actions, elbow_actions, camera_actions = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], reset_actions = [0, 0]):
         """Step the quadruped in the environment.
