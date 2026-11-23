@@ -1,5 +1,6 @@
 # Quadruped-RL: Learning to Walk with a Lightweight Physics Engine
 
+
 ![Live Simulation](visualizations/live_screen.png)
 
 ## Table Of Contents
